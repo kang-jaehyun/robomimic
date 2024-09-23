@@ -1,13 +1,13 @@
 {
     "algo_name": "bc",
     "experiment": {
-        "name": "seed_123_human50_resnet18",
+        "name": "seed_123_ds_mg-3000",
         "validate": false,
         "logging": {
             "terminal_output_to_txt": true,
             "log_tb": true,
             "log_wandb": true,
-            "wandb_proj_name": "bc_xfmr_09-23-bc-baseline_human50_resnet18"
+            "wandb_proj_name": "bc_xfmr_09-23-bc-debug"
         },
         "mse": {},
         "save": {
@@ -71,13 +71,13 @@
     "train": {
         "data": [
             {
-                "path": "/workspace/robocasa/datasets/v0.1/single_stage/kitchen_drawer/OpenDrawer/2024-05-03/demo_gentex_im128_randcams.hdf5",
+                "path": "/workspace/robocasa/datasets/v0.1/single_stage/kitchen_drawer/OpenDrawer/mg/2024-05-04-22-38-42/demo_gentex_im128_randcams.hdf5",
                 "horizon": 500,
                 "do_eval": false,
-                "filter_key": "50_demos"
+                "filter_key": "3000_demos"
             }
         ],
-        "output_dir": "workspace/robocasa/expdata/robocasa/bc_xfmr/09-23-bc-baseline-human50-resnet18",
+        "output_dir": "workspace/robocasa/expdata/robocasa/bc_xfmr/09-23-bc-debug",
         "num_data_workers": 5,
         "hdf5_cache_mode": null,
         "hdf5_use_swmr": true,
@@ -217,10 +217,10 @@
                 "obs_randomizer_kwargs": {}
             },
             "rgb": {
-                "core_class": "VisualCore",
+                "core_class": "VisualCoreLanguageConditioned",
                 "core_kwargs": {
                     "feature_dimension": 64,
-                    "backbone_class": "ResNet18Conv",
+                    "backbone_class": "ResNet18ConvFiLM",
                     "backbone_kwargs": {
                         "pretrained": false,
                         "input_coord_conv": false
@@ -264,7 +264,7 @@
         ],
         "hp_values": [
             123,
-            "human-50",
+            "mg-3000",
             {
                 "crop_height": 116,
                 "crop_width": 116,

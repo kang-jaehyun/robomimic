@@ -1,13 +1,13 @@
 {
     "algo_name": "bc",
     "experiment": {
-        "name": "seed_123_human50_resnet18",
+        "name": "seed_123_human50_resnet18-skillconditioned",
         "validate": false,
         "logging": {
             "terminal_output_to_txt": true,
             "log_tb": true,
             "log_wandb": true,
-            "wandb_proj_name": "bc_xfmr_09-23-bc-baseline_human50_resnet18"
+            "wandb_proj_name": "bc_xfmr_09-23-bc-baseline_human50_resnet18-skillconditioned"
         },
         "mse": {},
         "save": {
@@ -71,13 +71,13 @@
     "train": {
         "data": [
             {
-                "path": "/workspace/robocasa/datasets/v0.1/single_stage/kitchen_drawer/OpenDrawer/2024-05-03/demo_gentex_im128_randcams.hdf5",
+                "path": "/workspace/robocasa/datasets/v0.1/single_stage/kitchen_drawer/OpenDrawer/2024-05-03/demo_gentex_im128_randcams_la.hdf5",
                 "horizon": 500,
                 "do_eval": false,
                 "filter_key": "50_demos"
             }
         ],
-        "output_dir": "workspace/robocasa/expdata/robocasa/bc_xfmr/09-23-bc-baseline-human50-resnet18",
+        "output_dir": "/workspace/robomimic/expdata/robocasa/bc_xfmr/09-23-bc-baseline-human50-resnet18-skillconditioned",
         "num_data_workers": 5,
         "hdf5_cache_mode": null,
         "hdf5_use_swmr": true,
@@ -160,6 +160,9 @@
         "gaussian": {
             "enabled": false
         },
+        "skill": {
+            "enabled": true
+        },
         "gmm": {
             "enabled": false,
             "num_modes": 5,
@@ -176,7 +179,7 @@
         "transformer": {
             "enabled": true,
             "supervise_all_steps": true,
-            "pred_future_acs": true,
+            "pred_future_acs": false,
             "causal": false,
             "num_layers": 6,
             "embed_dim": 512,

@@ -54,6 +54,9 @@ class BCConfig(BaseConfig):
         self.algo.gmm.std_activation = "softplus"       # activation to use for std output from policy net
         self.algo.gmm.low_noise_eval = True             # low-std at test-time 
 
+        # Skill-conditioned policy settings
+        self.algo.skill.enabled = False
+
         # stochastic VAE policy settings
         self.algo.vae.enabled = False                   # whether to train a VAE policy
         self.algo.vae.latent_dim = 14                   # VAE latent dimnsion - set to twice the dimensionality of action space
@@ -106,5 +109,6 @@ class BCConfig(BaseConfig):
         self.algo.transformer.nn_parameter_for_timesteps = True     # if true, use nn.Parameter otherwise use nn.Embedding
         self.algo.transformer.pred_future_acs = False               # shift action prediction forward to predict future actions instead of past actions
         self.algo.transformer.causal = True                         # whether the transformer is causal
+
 
         self.algo.language_conditioned = False                      # whether policy is language conditioned

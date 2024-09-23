@@ -14,6 +14,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.distributions as D
+from torchvision import models as vision_models
 
 import robomimic.utils.tensor_utils as TensorUtils
 from robomimic.models.base_nets import Module
@@ -1122,6 +1123,219 @@ class TransformerActorNetwork(MIMO_Transformer):
         outputs["action"] = torch.tanh(outputs["action"])
 
         return outputs["action"] # only action sequences
+
+    def _to_string(self):
+        """Info to pretty print."""
+        return "action_dim={}".format(self.ac_dim)
+
+class TransformerSkillActorNetwork(MIMO_Transformer):
+    """
+    An Transformer policy network that predicts actions from observation sequences (assumed to be frame stacked
+    from previous observations) and possible from previous actions as well (in an autoregressive manner).
+    """
+    def __init__(
+        self,
+        obs_shapes,
+        ac_dim,
+        transformer_embed_dim,
+        transformer_num_layers,
+        transformer_num_heads,
+        transformer_context_length,
+        transformer_emb_dropout=0.1,
+        transformer_attn_dropout=0.1,
+        transformer_block_output_dropout=0.1,
+        transformer_sinusoidal_embedding=False,
+        transformer_activation="gelu",
+        transformer_nn_parameter_for_timesteps=False,
+        goal_shapes=None,
+        encoder_kwargs=None,
+        skill_dim=384, # TODO configurable
+    ):
+        """
+        Args:
+
+            obs_shapes (OrderedDict): a dictionary that maps modality to
+                expected shapes for observations.
+            
+            ac_dim (int): dimension of action space.
+
+            transformer_embed_dim (int): dimension for embeddings used by transformer
+
+            transformer_num_layers (int): number of transformer blocks to stack
+
+            transformer_num_heads (int): number of attention heads for each
+                transformer block - must divide @transformer_embed_dim evenly. Self-attention is 
+                computed over this many partitions of the embedding dimension separately.
+            
+            transformer_context_length (int): expected length of input sequences
+
+            transformer_embedding_dropout (float): dropout probability for embedding inputs in transformer
+
+            transformer_attn_dropout (float): dropout probability for attention outputs for each transformer block
+
+            transformer_block_output_dropout (float): dropout probability for final outputs for each transformer block
+            
+            goal_shapes (OrderedDict): a dictionary that maps modality to
+                expected shapes for goal observations.
+            
+            encoder_kwargs (dict or None): If None, results in default encoder_kwargs being applied. Otherwise, should
+                be nested dictionary containing relevant per-modality information for encoder networks.
+                Should be of form:
+
+                obs_modality1: dict
+                    feature_dimension: int
+                    core_class: str
+                    core_kwargs: dict
+                        ...
+                        ...
+                    obs_randomizer_class: str
+                    obs_randomizer_kwargs: dict
+                        ...
+                        ...
+                obs_modality2: dict
+                    ...
+        """
+        self.ac_dim = ac_dim
+
+        assert isinstance(obs_shapes, OrderedDict)
+        self.obs_shapes = obs_shapes
+
+        self.transformer_nn_parameter_for_timesteps = transformer_nn_parameter_for_timesteps
+
+        # set up different observation groups for @RNN_MIMO_MLP
+        observation_group_shapes = OrderedDict()
+        observation_group_shapes["obs"] = OrderedDict(self.obs_shapes)
+
+        self._is_goal_conditioned = False
+        if goal_shapes is not None and len(goal_shapes) > 0:
+            assert isinstance(goal_shapes, OrderedDict)
+            self._is_goal_conditioned = True
+            self.goal_shapes = OrderedDict(goal_shapes)
+            observation_group_shapes["goal"] = OrderedDict(self.goal_shapes)
+        else:
+            self.goal_shapes = OrderedDict()
+
+        output_shapes = self._get_output_shapes()
+        super(TransformerSkillActorNetwork, self).__init__(
+            input_obs_group_shapes=observation_group_shapes,
+            output_shapes=output_shapes,
+            transformer_embed_dim=transformer_embed_dim,
+            transformer_num_layers=transformer_num_layers,
+            transformer_num_heads=transformer_num_heads,
+            transformer_context_length=transformer_context_length,
+            transformer_emb_dropout=transformer_emb_dropout,
+            transformer_attn_dropout=transformer_attn_dropout,
+            transformer_block_output_dropout=transformer_block_output_dropout,
+            transformer_sinusoidal_embedding=transformer_sinusoidal_embedding,
+            transformer_activation=transformer_activation,
+            transformer_nn_parameter_for_timesteps=transformer_nn_parameter_for_timesteps,
+
+            encoder_kwargs=encoder_kwargs,
+        )
+        skill_dim = 384
+        self.nets['skill_encoder'] = vision_models.resnet18(pretrained=True)
+        self.nets['skill_encoder'].fc = nn.Linear(512, skill_dim)
+        
+        transformer_input_dim = self.nets["encoder"].output_shape()[0]
+        self.nets['skill_projection'] = nn.Linear(skill_dim, skill_dim)
+        self.nets['embed_encoder'] = nn.Linear(transformer_input_dim + skill_dim, 512) # 512 = transformer_embed_dim
+
+    def _get_output_shapes(self):
+        """
+        Allow subclasses to re-define outputs from @MIMO_Transformer, since we won't
+        always directly predict actions, but may instead predict the parameters
+        of a action distribution.
+        """
+        output_shapes = OrderedDict(action=(self.ac_dim,))
+        return output_shapes
+
+    def output_shape(self, input_shape):
+        # note: @input_shape should be dictionary (key: mod)
+        # infers temporal dimension from input shape
+        mod = list(self.obs_shapes.keys())[0]
+        T = input_shape[mod][0]
+        TensorUtils.assert_size_at_dim(input_shape, size=T, dim=0, 
+                msg="TransformerSkillActorNetwork: input_shape inconsistent in temporal dimension")
+        return [T, self.ac_dim]
+
+    def forward(self, obs_dict, actions=None, goal_dict=None):
+        """
+        Forward a sequence of inputs through the Transformer.
+        Args:
+            obs_dict (dict): batch of observations - each tensor in the dictionary
+                should have leading dimensions batch and time [B, T, ...]
+            actions (torch.Tensor): batch of actions of shape [B, T, D]
+            goal_dict (dict): if not None, batch of goal observations
+        Returns:
+            outputs (torch.Tensor or dict): contains predicted action sequence, or dictionary
+                with predicted action sequence and predicted observation sequences
+        """
+        if self._is_goal_conditioned:
+            assert goal_dict is not None
+            # repeat the goal observation in time to match dimension with obs_dict
+            mod = list(obs_dict.keys())[0]
+            goal_dict = TensorUtils.unsqueeze_expand_at(goal_dict, size=obs_dict[mod].shape[1], dim=1)
+
+        forward_kwargs = dict(obs=obs_dict, goal=goal_dict)
+        outputs = self._forward(**forward_kwargs)
+
+        # apply tanh squashing to ensure actions are in [-1, 1]
+        outputs["action"] = torch.tanh(outputs["action"])
+
+        return outputs["action"], outputs['skills']
+
+    def _forward(self, **inputs):
+        """
+        Process each set of inputs in its own observation group.
+        Args:
+            inputs (dict): a dictionary of dictionaries with one dictionary per
+                observation group. Each observation group's dictionary should map
+                modality to torch.Tensor batches. Should be consistent with
+                @self.input_obs_group_shapes. First two leading dimensions should
+                be batch and time [B, T, ...] for each tensor.
+        Returns:
+            outputs (dict): dictionary of output torch.Tensors, that corresponds
+                to @self.output_shapes. Leading dimensions will be batch and time [B, T, ...]
+                for each tensor.
+        """
+        for obs_group in self.input_obs_group_shapes:
+            for k in self.input_obs_group_shapes[obs_group]:
+                # first two dimensions should be [B, T] for inputs
+                if inputs[obs_group][k] is None:
+                    continue
+                assert inputs[obs_group][k].ndim - 2 == len(self.input_obs_group_shapes[obs_group][k])
+
+        inputs = inputs.copy()
+
+        B, T, C, H, W = inputs['obs']['robot0_agentview_left_image'].shape
+        skills = self.nets['skill_encoder'](inputs['obs']['robot0_agentview_left_image'].reshape(B*T, C, H, W))
+        skills = skills.reshape(B, T, -1)
+        skill_detached = skills.detach()
+
+        skill_proj = self.nets['skill_projection'](skill_detached)
+        
+        transformer_encoder_outputs = None
+        transformer_inputs = TensorUtils.time_distributed(
+            inputs, self.nets["encoder"], inputs_as_kwargs=True
+        )
+        assert transformer_inputs.ndim == 3  # [B, T, D]
+
+        transformer_inputs = torch.cat([transformer_inputs, skill_proj], dim=-1)
+
+        if transformer_encoder_outputs is None:
+            transformer_embeddings = self.input_embedding(transformer_inputs)
+            # pass encoded sequences through transformer
+            transformer_encoder_outputs = self.nets["transformer"].forward(transformer_embeddings)
+
+        transformer_outputs = transformer_encoder_outputs
+        # apply decoder to each timestep of sequence to get a dictionary of outputs
+        output = TensorUtils.time_distributed(
+            transformer_outputs, self.nets["decoder"]
+        )
+        output["transformer_encoder_outputs"] = transformer_encoder_outputs
+        output['skills'] = skills
+
+        return output
 
     def _to_string(self):
         """Info to pretty print."""
