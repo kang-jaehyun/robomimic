@@ -46,7 +46,7 @@ class SequenceDataset(torch.utils.data.Dataset):
         shuffled_obs_key_groups=None,
         lang_encoder=None,
         dataset_lang=None,
-        latent_action=True, #TODO configurable
+        skill=False,
     ):
         """
         Dataset class for fetching sequences of experience.
@@ -122,8 +122,8 @@ class SequenceDataset(torch.utils.data.Dataset):
         if self.action_keys is not None:
             self.dataset_keys = tuple(set(self.dataset_keys).union(set(self.action_keys)))
 
-        self.latent_action = latent_action
-        if self.latent_action:
+        self.skill = skill
+        if self.skill:
             self.dataset_keys = tuple(set(self.dataset_keys).union(set(["latent_action"])))
 
         self.action_config = action_config
