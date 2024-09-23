@@ -161,7 +161,7 @@
             "enabled": false
         },
         "skill": {
-            "enabled": true
+            "enabled": false
         },
         "gmm": {
             "enabled": false,

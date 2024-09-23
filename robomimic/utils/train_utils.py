@@ -192,6 +192,8 @@ def dataset_factory(config, obs_keys, filter_by_attribute=None, dataset_path=Non
     ds_weights = [ds_cfg.get("weight", 1.0) for ds_cfg in config.train.data]
     ds_langs = [ds_cfg.get("lang", None) for ds_cfg in config.train.data]
     ds_kwargs['skill'] = config.algo.skill.enabled
+
+    meta_ds_kwargs = dict()
     
     dataset = get_dataset(
         ds_class=R2D2Dataset if config.train.data_format == "r2d2" else SequenceDataset,
