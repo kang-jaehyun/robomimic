@@ -1,13 +1,13 @@
 {
     "algo_name": "bc",
     "experiment": {
-        "name": "seed_123_human50_resnet18-skillconditioned",
+        "name": "human50_resnet18-skillconditioned",
         "validate": false,
         "logging": {
             "terminal_output_to_txt": true,
             "log_tb": true,
             "log_wandb": true,
-            "wandb_proj_name": "bc_xfmr_09-23-bc-baseline_human50_resnet18-skillconditioned"
+            "wandb_proj_name": "actiondiffusion_robocasa"
         },
         "mse": {},
         "save": {

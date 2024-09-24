@@ -249,6 +249,8 @@ def rollout(config, device):
     # rollout_check = (epoch % config.experiment.rollout.rate == 0) #or (should_save_ckpt and ckpt_reason == "time") # remove this section condition, not desired when rollouts are expensive and saving frequent checkpoints
     # if config.experiment.rollout.enabled and (epoch > config.experiment.rollout.warmstart) and rollout_check:
         # wrap model as a RolloutPolicy to prepare for rollouts
+    should_save_ckpt = False
+    epoch_ckpt_name = "model_epoch_{}".format("rollout")
     rollout_model = RolloutPolicy(
         model,
         obs_normalization_stats=obs_normalization_stats,
@@ -304,33 +306,33 @@ def rollout(config, device):
         ckpt_reason = updated_stats["ckpt_reason"]
 
     # check if we need to save model MSE
-    # should_save_mse = False
-    # if config.experiment.mse.enabled:
-    #     if config.experiment.mse.every_n_epochs is not None and epoch % config.experiment.mse.every_n_epochs == 0:
-    #         should_save_mse = True
-    #     if config.experiment.mse.on_save_ckpt and should_save_ckpt:
-    #         should_save_mse = True
-    # if should_save_mse:
-    #     print("Computing MSE ...")
-    #     if config.experiment.mse.visualize:
-    #         save_vis_dir = os.path.join(vis_dir, epoch_ckpt_name)
-    #     else:
-    #         save_vis_dir = None
-    #     mse_log, vis_log = model.compute_mse_visualize(
-    #         trainset,
-    #         validset,
-    #         num_samples=config.experiment.mse.num_samples,
-    #         savedir=save_vis_dir,
-    #     )    
-    #     for k, v in mse_log.items():
-    #         data_logger.record("{}".format(k), v, epoch)
+    should_save_mse = False
+    if config.experiment.mse.enabled:
+        if config.experiment.mse.every_n_epochs is not None and epoch % config.experiment.mse.every_n_epochs == 0:
+            should_save_mse = True
+        if config.experiment.mse.on_save_ckpt and should_save_ckpt:
+            should_save_mse = True
+    if should_save_mse:
+        print("Computing MSE ...")
+        if config.experiment.mse.visualize:
+            save_vis_dir = os.path.join(vis_dir, epoch_ckpt_name)
+        else:
+            save_vis_dir = None
+        mse_log, vis_log = model.compute_mse_visualize(
+            trainset,
+            validset,
+            num_samples=config.experiment.mse.num_samples,
+            savedir=save_vis_dir,
+        )    
+        for k, v in mse_log.items():
+            data_logger.record("{}".format(k), v, epoch)
         
-    #     for k, v in vis_log.items():
-    #         data_logger.record("{}".format(k), v, epoch, data_type='image')
+        for k, v in vis_log.items():
+            data_logger.record("{}".format(k), v, epoch, data_type='image')
 
 
-    #     print("MSE Log Epoch {}".format(epoch))
-    #     print(json.dumps(mse_log, sort_keys=True, indent=4))
+        print("MSE Log Epoch {}".format(epoch))
+        print(json.dumps(mse_log, sort_keys=True, indent=4))
     
     # # Only keep saved videos if the ckpt should be saved (but not because of validation score)
     # should_save_video = (should_save_ckpt and (ckpt_reason != "valid")) or config.experiment.keep_all_videos

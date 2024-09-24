@@ -1,15 +1,21 @@
 {
     "algo_name": "bc",
     "experiment": {
-        "name": "human50_resnet18",
+        "name": "human50_resnet18-skillconditioned-eval",
         "validate": false,
         "logging": {
             "terminal_output_to_txt": true,
             "log_tb": true,
-            "log_wandb": true,
+            "log_wandb": false,
             "wandb_proj_name": "actiondiffusion_robocasa"
         },
-        "mse": {},
+        "mse": {
+            "enabled": false,
+            "every_n_epochs": 50,
+            "on_save_ckpt": true,
+            "num_samples": 20,
+            "visualize": true
+        },
         "save": {
             "enabled": true,
             "every_n_seconds": null,
@@ -23,17 +29,19 @@
         "validation_epoch_every_n_steps": 10,
         "env": null,
         "additional_envs": null,
-        "render": false,
+        "render": true,
         "render_video": true,
-        "keep_all_videos": false,
+        "keep_all_videos": true,
         "video_skip": 5,
         "rollout": {
             "enabled": true,
             "n": 50,
             "horizon": 500,
             "rate": 100,
-            "warmstart": 0,
-            "terminate_on_success": true
+            "warmstart": -1,
+            "terminate_on_success": true,
+            "batched": false,
+            "num_batch_envs": 5
         },
         "env_meta_update_dict": {
             "env_kwargs": {
@@ -66,24 +74,26 @@
                 "randomize_cameras": false,
                 "obj_instance_split": "B"
             }
-        }
+        },
+        "ckpt_path": "/home/jaehyun/workspace/robomimic/robomimic/expdata/robocasa/bc_xfmr/09-23-bc-baseline-human50-resnet18-skillconditioned/seed_123_human50_resnet18-skillconditioned/20240924045307/models/model_epoch_400.pth"
     },
     "train": {
         "data": [
             {
-                "path": "datasets/v0.1/single_stage/kitchen_drawer/OpenDrawer/2024-05-03/demo_gentex_im128_randcams.hdf5",
+                "path": "datasets/v0.1/single_stage/kitchen_drawer/OpenDrawer/2024-05-03/demo_gentex_im128_randcams_la.hdf5",
                 "horizon": 500,
-                "do_eval": false,
+                "do_eval": true,
                 "filter_key": "50_demos"
             }
         ],
-        "output_dir": "expdata/robocasa/expdata/robocasa/bc_xfmr/09-23-bc-baseline-human50-resnet18",
-        "num_data_workers": 5,
+        "output_dir": "expdata/robocasa/bc_xfmr/09-23-bc-baseline-human50-resnet18-skillconditioned",
+        "num_data_workers": 0,
         "hdf5_cache_mode": null,
         "hdf5_use_swmr": true,
         "hdf5_load_next_obs": false,
         "hdf5_normalize_obs": false,
         "hdf5_filter_key": null,
+        "hdf5_validation_filter_key": null,
         "seq_length": 10,
         "pad_seq_length": true,
         "frame_stack": 10,
@@ -91,12 +101,9 @@
         "dataset_keys": [
             "actions"
         ],
-        "goal_mode": null,
-        "cuda": true,
-        "batch_size": 16,
-        "num_epochs": 1000,
-        "max_grad_norm": 100.0,
-        "seed": 123,
+        "action_keys": [
+            "actions"
+        ],
         "action_config": {
             "actions": {
                 "normalization": null
@@ -132,7 +139,15 @@
             "action_dict/base_mode": {
                 "normalization": null
             }
-        }
+        },
+        "goal_mode": null,
+        "cuda": true,
+        "batch_size": 16,
+        "num_epochs": 0,
+        "seed": 123,
+        "max_grad_norm": 100.0,
+        "data_format": "robomimic",
+        "shuffled_obs_key_groups": null
     },
     "algo": {
         "optim_params": {
@@ -161,7 +176,7 @@
             "enabled": false
         },
         "skill": {
-            "enabled": false
+            "enabled": true
         },
         "gmm": {
             "enabled": false,
