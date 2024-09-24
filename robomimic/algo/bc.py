@@ -913,6 +913,36 @@ class BC_Transformer_SkillConditioned(BC):
         losses["action_loss"] = action_loss
         return losses
 
+    def log_info(self, info):
+        """
+        Process info dictionary from @train_on_batch to summarize
+        information to pass to tensorboard for logging.
+
+        Args:
+            info (dict): dictionary of info
+
+        Returns:
+            loss_log (dict): name -> summary statistic
+        """
+        log = super(BC, self).log_info(info)
+        log["Loss"] = info["losses"]["action_loss"].item()
+        log["Skill_Loss"] = info["losses"]["skill_loss"].item()
+        if "action_l2_loss" in info["losses"]:
+            log["L2_Loss"] = info["losses"]["action_l2_loss"].item()
+        if "action_l1_loss" in info["losses"]:
+            log["L1_Loss"] = info["losses"]["action_l1_loss"].item()
+        if "action_cos_loss" in info["losses"]:
+            log["Cosine_Loss"] = info["losses"]["action_cos_loss"].item()
+        if "skill_l2_loss" in info["losses"]:
+            log["Skill_L2_Loss"] = info["losses"]["skill_l2_loss"].item()
+        if "skill_l1_loss" in info["losses"]:
+            log["Skill_L1_Loss"] = info["losses"]["skill_l1_loss"].item()
+        if "skill_cos_loss" in info["losses"]:
+            log["Skill_Cosine_Loss"] = info["losses"]["skill_cos_loss"].item()
+        if "policy_grad_norms" in info:
+            log["Policy_Grad_Norms"] = info["policy_grad_norms"]
+        return log
+    
     def _train_step(self, losses):
         """
         Internal helper function for BC algo class. Perform backpropagation on the
