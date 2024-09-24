@@ -890,10 +890,10 @@ class BC_Transformer_SkillConditioned(BC):
         # cosine direction loss on eef delta position
         losses["action_cos_loss"] = LossUtils.cosine_loss(actions[..., :3], a_target[..., :3])
 
-        losses["skill_l2_loss"] = nn.MSELoss()(actions, a_target)
-        losses["skill_l1_loss"] = nn.SmoothL1Loss()(actions, a_target)
+        losses["skill_l2_loss"] = nn.MSELoss()(skills, l_target)
+        losses["skill_l1_loss"] = nn.SmoothL1Loss()(skills, l_target)
         # cosine direction loss on eef delta position
-        losses["skill_cos_loss"] = LossUtils.cosine_loss(actions[..., :3], a_target[..., :3])
+        losses["skill_cos_loss"] = LossUtils.cosine_loss(skills[..., :3], l_target[..., :3])
 
 
         action_losses = [
@@ -1013,17 +1013,20 @@ class BC_Transformer_SkillConditioned(BC):
         """
         assert not self.nets.training
 
-        output = self.nets["policy"](obs_dict, actions=None, goal_dict=goal_dict)
+        action, skill = self.nets["policy"](obs_dict, actions=None, goal_dict=goal_dict)
 
         if self.supervise_all_steps:
             if self.algo_config.transformer.pred_future_acs:
-                output = output[:, 0, :]
+                action = action[:, 0, :]
+                # skill = skill[:, 0, :]
             else:
-                output = output[:, -1, :]
+                action = action[:, -1, :]
+                # skill = skill[:, -1, :]
         else:
-            output = output[:, -1, :]
+            action = action[:, -1, :]
+            # skill = skill[:, -1, :]
 
-        return output
+        return action
 
 class BC_Transformer_GMM(BC_Transformer):
     """
