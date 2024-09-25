@@ -77,13 +77,13 @@
                 "filter_key": "50_demos"
             },
             {
-                "path": "datasets/v0.1/single_stage/kitchen_drawer/OpenDrawer/2024-05-03/demo_gentex_im128_randcams_la.hdf5",
+                "path": "datasets/v0.1/single_stage/kitchen_drawer/OpenDrawer/2024-05-03/demo_gentex_im128_randcams_rcskill.hdf5",
                 "horizon": 500,
                 "do_eval": true,
                 "filter_key": "50_demos"
             }
         ],
-        "output_dir": "expdata/robocasa/bc_xfmr/09-23-bc-baseline-human50-resnet18-skillconditioned",
+        "output_dir": "expdata/robocasa/bc_xfmr/human50_resnet18_skillconditioned",
         "num_data_workers": 5,
         "hdf5_cache_mode": null,
         "hdf5_use_swmr": true,
