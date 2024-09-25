@@ -884,6 +884,10 @@ class BC_Transformer_SkillConditioned(BC):
 
         actions = predictions["actions"]
         skills = predictions['skills']
+        
+        h = self.context_length
+        if not self.supervise_all_steps and not self.pred_future_acs:
+            skills = skills[:, -1, :]
 
         losses["action_l2_loss"] = nn.MSELoss()(actions, a_target)
         losses["action_l1_loss"] = nn.SmoothL1Loss()(actions, a_target)
@@ -997,7 +1001,7 @@ class BC_Transformer_SkillConditioned(BC):
             # just use current timestep
             input_batch["actions"] = batch["actions"][:, h-1, :]
             input_batch["latent_action"] = batch["latent_action"][:, h-1, :]
-
+                
         if self.pred_future_acs:
             assert input_batch["actions"].shape[1] == h
 
