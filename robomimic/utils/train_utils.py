@@ -114,11 +114,11 @@ def load_data_for_training(config, obs_keys, lang_encoder=None):
             "did not specify filter keys corresponding to train and valid split in dataset" \
             " - please fill config.train.hdf5_filter_key and config.train.hdf5_validation_filter_key"
         train_demo_keys = FileUtils.get_demos_for_filter_key(
-            hdf5_path=os.path.expanduser(config.train.data),
+            hdf5_path=os.path.expanduser(config.train.data[0]["path"]), # assuming hdf5 contains both train, valid
             filter_key=train_filter_by_attribute,
         )
         valid_demo_keys = FileUtils.get_demos_for_filter_key(
-            hdf5_path=os.path.expanduser(config.train.data),
+            hdf5_path=os.path.expanduser(config.train.data[0]["path"]), # assuming hdf5 contains both train, valid
             filter_key=valid_filter_by_attribute,
         )
         assert set(train_demo_keys).isdisjoint(set(valid_demo_keys)), "training demonstrations overlap with " \
