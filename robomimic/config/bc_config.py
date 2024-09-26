@@ -56,6 +56,7 @@ class BCConfig(BaseConfig):
 
         # Skill-conditioned policy settings
         self.algo.skill.enabled = False
+        self.algo.skill.pretrain = False
 
         # stochastic VAE policy settings
         self.algo.vae.enabled = False                   # whether to train a VAE policy
