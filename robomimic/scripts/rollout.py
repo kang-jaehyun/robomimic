@@ -109,9 +109,9 @@ def rollout(config, device):
     eval_env_name_list = []
     eval_env_horizon_list = []
     for (dataset_i, dataset_cfg) in enumerate(config.train.data):
-        do_eval = dataset_cfg.get("do_eval", True)
-        if do_eval is not True:
-            continue
+        # do_eval = dataset_cfg.get("do_eval", True)
+        # if do_eval is not True:
+        #     continue
         eval_env_meta_list.append(env_meta_list[dataset_i])
         eval_shape_meta_list.append(shape_meta_list[dataset_i])
         eval_env_name_list.append(env_meta_list[dataset_i]["env_name"])
@@ -302,37 +302,7 @@ def rollout(config, device):
     best_success_rate = updated_stats["best_success_rate"]
     epoch_ckpt_name = updated_stats["epoch_ckpt_name"]
     should_save_ckpt = (config.experiment.save.enabled and updated_stats["should_save_ckpt"]) or should_save_ckpt
-    if updated_stats["ckpt_reason"] is not None:
-        ckpt_reason = updated_stats["ckpt_reason"]
 
-    # check if we need to save model MSE
-    should_save_mse = False
-    if config.experiment.mse.enabled:
-        if config.experiment.mse.every_n_epochs is not None and epoch % config.experiment.mse.every_n_epochs == 0:
-            should_save_mse = True
-        if config.experiment.mse.on_save_ckpt and should_save_ckpt:
-            should_save_mse = True
-    if should_save_mse:
-        print("Computing MSE ...")
-        if config.experiment.mse.visualize:
-            save_vis_dir = os.path.join(vis_dir, epoch_ckpt_name)
-        else:
-            save_vis_dir = None
-        mse_log, vis_log = model.compute_mse_visualize(
-            trainset,
-            validset,
-            num_samples=config.experiment.mse.num_samples,
-            savedir=save_vis_dir,
-        )    
-        for k, v in mse_log.items():
-            data_logger.record("{}".format(k), v, epoch)
-        
-        for k, v in vis_log.items():
-            data_logger.record("{}".format(k), v, epoch, data_type='image')
-
-
-        print("MSE Log Epoch {}".format(epoch))
-        print(json.dumps(mse_log, sort_keys=True, indent=4))
     
     # # Only keep saved videos if the ckpt should be saved (but not because of validation score)
     # should_save_video = (should_save_ckpt and (ckpt_reason != "valid")) or config.experiment.keep_all_videos
@@ -380,6 +350,13 @@ def main(args):
     if args.name is not None:
         config.experiment.name = args.name
 
+    if args.ckpt is not None:
+        config.experiment.ckpt_path = args.ckpt
+
+    if args.rollout_num is not None:
+        config.experiment.rollout.n = args.rollout_num
+    config.train.output_dir = os.path.join(config.train.output_dir, 'rollout')
+    
     # get torch device
     device = TorchUtils.get_torch_device(try_to_use_cuda=config.train.cuda)
 
@@ -417,6 +394,7 @@ def main(args):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
 
+
     # External config file that overwrites default config
     parser.add_argument(
         "--config",
@@ -448,6 +426,13 @@ if __name__ == "__main__":
         default=None,
         help="(optional) if provided, override the dataset path defined in the config",
     )
+    
+    parser.add_argument(
+        "--rollout_num",
+        type=int,
+        default=None,
+        help="(optional) if provided, override the dataset path defined in the config",
+    )
 
     # debug mode
     parser.add_argument(
@@ -456,5 +441,12 @@ if __name__ == "__main__":
         help="set this flag to run a quick training run for debugging purposes"
     )
 
+    parser.add_argument(
+        "--ckpt",
+        required=False,
+        type=str,
+        help="Path to a checkpoint to load in model weights from."
+    )
+    
     args = parser.parse_args()
     main(args)
