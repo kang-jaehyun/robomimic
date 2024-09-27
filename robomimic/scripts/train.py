@@ -442,6 +442,12 @@ def main(args):
     if args.name is not None:
         config.experiment.name = args.name
 
+    if args.seed is not None:
+        config.train.seed = args.seed
+    
+    config.experiment.name = os.path.join(config.experiment.name, "seed_{}".format(config.train.seed))
+    config.train.output_dir = os.path.join(config.train.output_dir, f'train')
+    
     # get torch device
     device = TorchUtils.get_torch_device(try_to_use_cuda=config.train.cuda)
 
@@ -493,6 +499,13 @@ if __name__ == "__main__":
         "--algo",
         type=str,
         help="(optional) name of algorithm to run. Only needs to be provided if --config is not provided",
+    )
+    
+    parser.add_argument(
+        "--seed",
+        type=int,
+        default=None,
+        help="(optional) seed to use for training.",
     )
 
     # Experiment Name (for tensorboard, saving models, etc.)
