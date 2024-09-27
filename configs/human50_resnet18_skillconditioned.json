@@ -1,7 +1,7 @@
 {
     "algo_name": "bc",
     "experiment": {
-        "name": "human50_resnet18",
+        "name": "human50_resnet18-skillconditioned-custom",
         "validate": false,
         "logging": {
             "terminal_output_to_txt": true,
@@ -13,25 +13,25 @@
         "save": {
             "enabled": true,
             "every_n_seconds": null,
-            "every_n_epochs": 100,
+            "every_n_epochs": 10,
             "epochs": [],
             "on_best_validation": false,
             "on_best_rollout_return": false,
             "on_best_rollout_success_rate": false
         },
-        "epoch_every_n_steps": 500,
+        "epoch_every_n_steps": 100,
         "validation_epoch_every_n_steps": 10,
         "env": null,
         "additional_envs": null,
         "render": false,
-        "render_video": true,
+        "render_video": false,
         "keep_all_videos": false,
         "video_skip": 5,
         "rollout": {
             "enabled": true,
-            "n": 50,
+            "n": 20,
             "horizon": 500,
-            "rate": 100,
+            "rate": 10,
             "warmstart": 0,
             "terminate_on_success": true
         },
@@ -71,13 +71,19 @@
     "train": {
         "data": [
             {
-                "path": "datasets/v0.1/single_stage/kitchen_drawer/OpenDrawer/2024-05-03/demo_gentex_im128_randcams.hdf5",
+                "path": "datasets/v0.1/single_stage/kitchen_drawer/OpenDrawer/2024-05-03/demo_gentex_im128_randcams_la.hdf5",
                 "horizon": 500,
                 "do_eval": false,
                 "filter_key": "50_demos"
+            },
+            {
+                "path": "datasets/v0.1/single_stage/kitchen_drawer/OpenDrawer/2024-05-03/demo_gentex_im128_randcams_la.hdf5",
+                "horizon": 500,
+                "do_eval": true,
+                "filter_key": "50_demos"
             }
         ],
-        "output_dir": "expdata/robocasa/expdata/robocasa/bc_xfmr/09-23-bc-baseline-human50-resnet18",
+        "output_dir": "expdata/robocasa/bc_xfmr/human50_resnet18_skillconditioned",
         "num_data_workers": 5,
         "hdf5_cache_mode": null,
         "hdf5_use_swmr": true,
@@ -93,8 +99,8 @@
         ],
         "goal_mode": null,
         "cuda": true,
-        "batch_size": 16,
-        "num_epochs": 1000,
+        "batch_size": 64,
+        "num_epochs": 100,
         "max_grad_norm": 100.0,
         "seed": 123,
         "action_config": {
@@ -142,7 +148,7 @@
                     "initial": 0.0001,
                     "decay_factor": 1.0,
                     "epoch_schedule": [
-                        100
+                        10
                     ],
                     "scheduler_type": "constant_with_warmup"
                 },
@@ -161,7 +167,7 @@
             "enabled": false
         },
         "skill": {
-            "enabled": false
+            "enabled": true
         },
         "gmm": {
             "enabled": false,

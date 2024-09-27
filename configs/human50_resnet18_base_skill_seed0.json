@@ -1,8 +1,8 @@
 {
     "algo_name": "bc",
     "experiment": {
-        "name": "human50_resnet18",
-        "validate": false,
+        "name": "human50_resnet18-base-skill_seed0",
+        "validate": true,
         "logging": {
             "terminal_output_to_txt": true,
             "log_tb": true,
@@ -24,12 +24,12 @@
         "env": null,
         "additional_envs": null,
         "render": false,
-        "render_video": true,
+        "render_video": false,
         "keep_all_videos": false,
         "video_skip": 5,
         "rollout": {
             "enabled": true,
-            "n": 50,
+            "n": 20,
             "horizon": 500,
             "rate": 100,
             "warmstart": 0,
@@ -71,19 +71,19 @@
     "train": {
         "data": [
             {
-                "path": "datasets/v0.1/single_stage/kitchen_drawer/OpenDrawer/2024-05-03/demo_gentex_im128_randcams.hdf5",
+                "path": "datasets/v0.1/single_stage/kitchen_drawer/OpenDrawer/2024-05-03/demo_gentex_im128_randcams_la.hdf5",
                 "horizon": 500,
-                "do_eval": false,
-                "filter_key": "50_demos"
+                "do_eval": false
             }
         ],
-        "output_dir": "expdata/robocasa/expdata/robocasa/bc_xfmr/09-23-bc-baseline-human50-resnet18",
+        "output_dir": "../expdata/actiondiffusion_robocasa/human50_resnet18-seed0",
         "num_data_workers": 5,
         "hdf5_cache_mode": null,
         "hdf5_use_swmr": true,
         "hdf5_load_next_obs": false,
         "hdf5_normalize_obs": false,
-        "hdf5_filter_key": null,
+        "hdf5_filter_key": "train",
+        "hdf5_validation_filter_key": "valid",
         "seq_length": 10,
         "pad_seq_length": true,
         "frame_stack": 10,
@@ -93,10 +93,10 @@
         ],
         "goal_mode": null,
         "cuda": true,
-        "batch_size": 16,
-        "num_epochs": 1000,
+        "batch_size": 32,
+        "num_epochs": 500,
         "max_grad_norm": 100.0,
-        "seed": 123,
+        "seed": 0,
         "action_config": {
             "actions": {
                 "normalization": null
@@ -161,7 +161,7 @@
             "enabled": false
         },
         "skill": {
-            "enabled": false
+            "enabled": true
         },
         "gmm": {
             "enabled": false,
@@ -266,7 +266,7 @@
             "obsrandargs"
         ],
         "hp_values": [
-            123,
+            0,
             "human-50",
             {
                 "crop_height": 116,

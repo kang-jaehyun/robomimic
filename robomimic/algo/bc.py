@@ -884,16 +884,20 @@ class BC_Transformer_SkillConditioned(BC):
 
         actions = predictions["actions"]
         skills = predictions['skills']
+        
+        h = self.context_length
+        if not self.supervise_all_steps and not self.pred_future_acs:
+            skills = skills[:, -1, :]
 
         losses["action_l2_loss"] = nn.MSELoss()(actions, a_target)
         losses["action_l1_loss"] = nn.SmoothL1Loss()(actions, a_target)
         # cosine direction loss on eef delta position
         losses["action_cos_loss"] = LossUtils.cosine_loss(actions[..., :3], a_target[..., :3])
 
-        losses["skill_l2_loss"] = nn.MSELoss()(actions, a_target)
-        losses["skill_l1_loss"] = nn.SmoothL1Loss()(actions, a_target)
+        losses["skill_l2_loss"] = nn.MSELoss()(skills, l_target)
+        losses["skill_l1_loss"] = nn.SmoothL1Loss()(skills, l_target)
         # cosine direction loss on eef delta position
-        losses["skill_cos_loss"] = LossUtils.cosine_loss(actions[..., :3], a_target[..., :3])
+        losses["skill_cos_loss"] = LossUtils.cosine_loss(skills[..., :3], l_target[..., :3])
 
 
         action_losses = [
@@ -913,6 +917,36 @@ class BC_Transformer_SkillConditioned(BC):
         losses["action_loss"] = action_loss
         return losses
 
+    def log_info(self, info):
+        """
+        Process info dictionary from @train_on_batch to summarize
+        information to pass to tensorboard for logging.
+
+        Args:
+            info (dict): dictionary of info
+
+        Returns:
+            loss_log (dict): name -> summary statistic
+        """
+        log = super(BC, self).log_info(info)
+        log["Loss"] = info["losses"]["action_loss"].item()
+        log["Skill_Loss"] = info["losses"]["skill_loss"].item()
+        if "action_l2_loss" in info["losses"]:
+            log["L2_Loss"] = info["losses"]["action_l2_loss"].item()
+        if "action_l1_loss" in info["losses"]:
+            log["L1_Loss"] = info["losses"]["action_l1_loss"].item()
+        if "action_cos_loss" in info["losses"]:
+            log["Cosine_Loss"] = info["losses"]["action_cos_loss"].item()
+        if "skill_l2_loss" in info["losses"]:
+            log["Skill_L2_Loss"] = info["losses"]["skill_l2_loss"].item()
+        if "skill_l1_loss" in info["losses"]:
+            log["Skill_L1_Loss"] = info["losses"]["skill_l1_loss"].item()
+        if "skill_cos_loss" in info["losses"]:
+            log["Skill_Cosine_Loss"] = info["losses"]["skill_cos_loss"].item()
+        if "policy_grad_norms" in info:
+            log["Policy_Grad_Norms"] = info["policy_grad_norms"]
+        return log
+    
     def _train_step(self, losses):
         """
         Internal helper function for BC algo class. Perform backpropagation on the
@@ -967,7 +1001,7 @@ class BC_Transformer_SkillConditioned(BC):
             # just use current timestep
             input_batch["actions"] = batch["actions"][:, h-1, :]
             input_batch["latent_action"] = batch["latent_action"][:, h-1, :]
-
+                
         if self.pred_future_acs:
             assert input_batch["actions"].shape[1] == h
 
@@ -1013,17 +1047,20 @@ class BC_Transformer_SkillConditioned(BC):
         """
         assert not self.nets.training
 
-        output = self.nets["policy"](obs_dict, actions=None, goal_dict=goal_dict)
+        action, skill = self.nets["policy"](obs_dict, actions=None, goal_dict=goal_dict)
 
         if self.supervise_all_steps:
             if self.algo_config.transformer.pred_future_acs:
-                output = output[:, 0, :]
+                action = action[:, 0, :]
+                # skill = skill[:, 0, :]
             else:
-                output = output[:, -1, :]
+                action = action[:, -1, :]
+                # skill = skill[:, -1, :]
         else:
-            output = output[:, -1, :]
+            action = action[:, -1, :]
+            # skill = skill[:, -1, :]
 
-        return output
+        return action
 
 class BC_Transformer_GMM(BC_Transformer):
     """

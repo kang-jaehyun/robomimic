@@ -123,6 +123,6 @@ venv.bak/
 
 # default experiment folder
 /expdata
-
+robomimic/expdata
 # private macros
-macros_private.py
+# macros_private.py

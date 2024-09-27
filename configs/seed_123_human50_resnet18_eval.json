@@ -1,7 +1,7 @@
 {
     "algo_name": "bc",
     "experiment": {
-        "name": "human50_resnet18",
+        "name": "human50_resnet18-eval",
         "validate": false,
         "logging": {
             "terminal_output_to_txt": true,
@@ -23,7 +23,7 @@
         "validation_epoch_every_n_steps": 10,
         "env": null,
         "additional_envs": null,
-        "render": false,
+        "render": true,
         "render_video": true,
         "keep_all_videos": false,
         "video_skip": 5,
@@ -66,14 +66,15 @@
                 "randomize_cameras": false,
                 "obj_instance_split": "B"
             }
-        }
+        },
+        "ckpt_path": "/home/jaehyun/workspace/robomimic/robomimic/expdata/robocasa/bc_xfmr/09-23-bc-baseline-human50-resnet18/models/model_epoch_400.pth"
     },
     "train": {
         "data": [
             {
                 "path": "datasets/v0.1/single_stage/kitchen_drawer/OpenDrawer/2024-05-03/demo_gentex_im128_randcams.hdf5",
                 "horizon": 500,
-                "do_eval": false,
+                "do_eval": true,
                 "filter_key": "50_demos"
             }
         ],
