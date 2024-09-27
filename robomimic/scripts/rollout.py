@@ -359,8 +359,8 @@ def main(args):
     if args.seed is not None:
         config.train.seed = args.seed
         
-    config.experiment.name = os.path.join(config.experiment.name, "seed_{}".format(config.train.seed))
-    config.train.output_dir = os.path.join(config.train.output_dir, f'rollout')
+    # config.experiment.name = os.path.join(config.experiment.name, "seed_{}".format(config.train.seed))
+    config.train.output_dir = os.path.join(config.train.output_dir, f'rollout/{config.train.seed}')
     
     # get torch device
     device = TorchUtils.get_torch_device(try_to_use_cuda=config.train.cuda)
