@@ -1311,8 +1311,11 @@ class TransformerSkillActorNetwork(MIMO_Transformer):
         inputs = inputs.copy()
 
         B, T, C, H, W = inputs['obs']['robot0_agentview_left_image'].shape
-        skills = self.nets['skill_encoder'](inputs['obs']['robot0_agentview_left_image'].reshape(B*T, C, H, W))
-        skills = skills.reshape(B, T, -1)
+        # skills = self.nets['skill_encoder'](inputs['obs']['robot0_agentview_left_image'].reshape(B*T, C, H, W))
+        # skills = skills.reshape(B, T, -1)
+        # skill_detached = skills.detach()
+        
+        skills = torch.zeros(B, T, 384).to(inputs['obs']['robot0_agentview_left_image'].device)
         skill_detached = skills.detach()
 
         skill_proj = self.nets['skill_projection'](skill_detached)
