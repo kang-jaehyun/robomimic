@@ -1,7 +1,7 @@
 {
     "algo_name": "bc",
     "experiment": {
-        "name": "human50_resnet18-base_seed0",
+        "name": "human50_resnet18-base-skill_zeroskill",
         "validate": true,
         "logging": {
             "terminal_output_to_txt": true,
@@ -71,12 +71,12 @@
     "train": {
         "data": [
             {
-                "path": "datasets/v0.1/single_stage/kitchen_drawer/OpenDrawer/2024-05-03/demo_gentex_im128_randcams.hdf5",
+                "path": "datasets/v0.1/single_stage/kitchen_drawer/OpenDrawer/2024-05-03/demo_gentex_im128_randcams_la.hdf5",
                 "horizon": 500,
                 "do_eval": false
             }
         ],
-        "output_dir": "../expdata/actiondiffusion_robocasa/human50_resnet18-seed0",
+        "output_dir": "../expdata/actiondiffusion_robocasa/human50_resnet18_skill_zeroskill",
         "num_data_workers": 5,
         "hdf5_cache_mode": null,
         "hdf5_use_swmr": true,
@@ -161,7 +161,7 @@
             "enabled": false
         },
         "skill": {
-            "enabled": false
+            "enabled": true
         },
         "gmm": {
             "enabled": false,
