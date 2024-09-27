@@ -54,6 +54,7 @@ def transformer_args_from_config(transformer_config):
         transformer_sinusoidal_embedding=transformer_config.sinusoidal_embedding,
         transformer_activation=transformer_config.activation,
         transformer_nn_parameter_for_timesteps=transformer_config.nn_parameter_for_timesteps,
+        causal=transformer_config.causal,
     )
     
     if "num_layers" in transformer_config:

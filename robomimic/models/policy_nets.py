@@ -996,6 +996,7 @@ class TransformerActorNetwork(MIMO_Transformer):
         transformer_activation="gelu",
         transformer_nn_parameter_for_timesteps=False,
         goal_shapes=None,
+        causal=False,
         encoder_kwargs=None,
     ):
         """
@@ -1076,7 +1077,8 @@ class TransformerActorNetwork(MIMO_Transformer):
             transformer_sinusoidal_embedding=transformer_sinusoidal_embedding,
             transformer_activation=transformer_activation,
             transformer_nn_parameter_for_timesteps=transformer_nn_parameter_for_timesteps,
-
+            causal=causal,
+            
             encoder_kwargs=encoder_kwargs,
         )
 
@@ -1147,6 +1149,7 @@ class TransformerSkillActorNetwork(MIMO_Transformer):
         transformer_sinusoidal_embedding=False,
         transformer_activation="gelu",
         transformer_nn_parameter_for_timesteps=False,
+        causal=False,
         goal_shapes=None,
         encoder_kwargs=None,
         skill_dim=384, # TODO configurable
@@ -1229,7 +1232,7 @@ class TransformerSkillActorNetwork(MIMO_Transformer):
             transformer_sinusoidal_embedding=transformer_sinusoidal_embedding,
             transformer_activation=transformer_activation,
             transformer_nn_parameter_for_timesteps=transformer_nn_parameter_for_timesteps,
-
+            causal=causal,
             encoder_kwargs=encoder_kwargs,
         )
         skill_dim = 384
