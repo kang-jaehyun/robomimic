@@ -1,7 +1,7 @@
 {
     "algo_name": "bc",
     "experiment": {
-        "name": "human50_resnet18-base_skillpretrain_seed0",
+        "name": "human50_resnet18-base_actionfinetune",
         "validate": true,
         "logging": {
             "terminal_output_to_txt": true,
@@ -13,7 +13,7 @@
         "save": {
             "enabled": true,
             "every_n_seconds": null,
-            "every_n_epochs": 100,
+            "every_n_epochs": 25,
             "epochs": [],
             "on_best_validation": false,
             "on_best_rollout_return": false,
@@ -27,6 +27,7 @@
         "render_video": false,
         "keep_all_videos": false,
         "video_skip": 5,
+        "ckpt_path": "/workspace/robomimic/expdata/actiondiffusion_robocasa/human50_resnet18-seed0/human50_resnet18-base_skillpretrain_seed0/20240926172736/models/model_epoch_100.pth",
         "rollout": {
             "enabled": true,
             "n": 20,
@@ -76,7 +77,7 @@
                 "do_eval": false
             }
         ],
-        "output_dir": "../expdata/actiondiffusion_robocasa/human50_resnet18-seed0",
+        "output_dir": "../expdata/actiondiffusion_robocasa/human50_resnet18",
         "num_data_workers": 5,
         "hdf5_cache_mode": null,
         "hdf5_use_swmr": true,
@@ -88,9 +89,6 @@
         "pad_seq_length": true,
         "frame_stack": 10,
         "pad_frame_stack": true,
-        "action_keys":[
-            "latent_action"
-        ],
         "dataset_keys": [
             "actions"
         ],
@@ -134,9 +132,6 @@
             },
             "action_dict/base_mode": {
                 "normalization": null
-            },
-            "latent_action": {
-                "normalization": null
             }
         }
     },
@@ -145,7 +140,7 @@
             "policy": {
                 "optimizer_type": "adamw",
                 "learning_rate": {
-                    "initial": 0.0001,
+                    "initial": 0.00005,
                     "decay_factor": 1.0,
                     "epoch_schedule": [
                         100
@@ -168,7 +163,8 @@
         },
         "skill": {
             "enabled": true,
-            "pretrain": true
+            "pretrain": false,
+            "finetune": true
         },
         "gmm": {
             "enabled": false,
