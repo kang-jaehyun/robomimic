@@ -43,7 +43,8 @@ from robomimic.algo import algo_factory, RolloutPolicy
 from robomimic.utils.log_utils import PrintLogger, DataLogger, flush_warnings
 
 
-def rollout(config, device):
+
+def rollout(config, device, epoch=0):
     """
     Train a model using the algorithm.
     """
@@ -267,7 +268,7 @@ def rollout(config, device):
         num_episodes=num_episodes,
         render=False,
         video_dir=video_dir if config.experiment.render_video else None,
-        epoch=0,
+        epoch=epoch,
         video_skip=config.experiment.get("video_skip", 5),
         terminate_on_success=config.experiment.rollout.terminate_on_success,
         del_envs_after_rollouts=True,
@@ -359,6 +360,9 @@ def main(args):
     if args.seed is not None:
         config.train.seed = args.seed
         
+    if "train" in config.experiment.logging.wandb_proj_name:
+        config.experiment.logging.wandb_proj_name = config.experiment.logging.wandb_proj_name.replace("train", "rollout")
+        
     config.experiment.name = os.path.join(config.experiment.name, "seed_{}".format(config.train.seed))
     config.train.output_dir = os.path.join(config.train.output_dir, f'rollout')
     
@@ -390,7 +394,7 @@ def main(args):
     # catch error during training and print it
     res_str = "finished run successfully!"
     try:
-        rollout(config, device=device)
+        rollout(config, device=device, epoch=args.epoch)
     except Exception as e:
         res_str = "run failed with error:\n{}\n\n{}".format(e, traceback.format_exc())
     print(res_str)
@@ -459,5 +463,12 @@ if __name__ == "__main__":
         help="Seed for random number generators."
     )
     
+    parser.add_argument(
+        "--epoch",
+        type=int,
+        default=0,
+        help=""
+    )
+        
     args = parser.parse_args()
     main(args)
