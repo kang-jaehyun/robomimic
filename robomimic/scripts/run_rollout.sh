@@ -2,7 +2,7 @@
 
 # 입력받은 첫 번째 인자가 폴더 경로로 사용됩니다.
 FOLDER=$1
-
+SEED=$2
 # 모델 파일들이 있는 경로 설정
 MODEL_DIR="$FOLDER/models"
 
@@ -24,11 +24,11 @@ for MODEL_FILE in "$MODEL_DIR"/model_epoch_*.pth; do
     echo "Running rollout for model: $MODEL_FILE (Epoch: $EPOCH)"
     
     # python 명령어 실행 (추출한 epoch 값을 --epoch 인자로 추가)
-    yes | DISPLAY=:1 python robomimic/scripts/rollout.py --config "$CONFIG_FILE" --ckpt "$MODEL_FILE" --rollout_num 50 --seed 0 --epoch "$EPOCH"
+    yes | DISPLAY=:1 python robomimic/scripts/rollout.py --config "$CONFIG_FILE" --ckpt "$MODEL_FILE" --rollout_num 50 --epoch "$EPOCH" --seed "$SEED"
     
     # 각 실행이 끝날 때까지 기다림
     wait
-    
+
   else
     echo "No model files found in: $MODEL_DIR"
     exit 1
