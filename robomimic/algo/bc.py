@@ -956,7 +956,7 @@ class BC_Transformer_SkillFinetune(BC):
         self.nets = self.nets.float().to(self.device)
         
         # freeze self.nets
-        for param in self.nets.parameters():
+        for param in self.nets["policy"].nets['encoder'].parameters():
             param.requires_grad = False
         
         # 3 layer MLP to project from 384 to 12
