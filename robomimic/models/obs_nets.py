@@ -911,6 +911,8 @@ class MIMO_Transformer(Module):
         transformer_sinusoidal_embedding=False,
         transformer_activation="gelu",
         transformer_nn_parameter_for_timesteps=False,
+        causal=False,
+        
         encoder_kwargs=None,
     ):
         """
@@ -987,6 +989,7 @@ class MIMO_Transformer(Module):
             attn_dropout=transformer_attn_dropout,
             block_output_dropout=transformer_block_output_dropout,
             activation=transformer_activation,
+            causal=False,
         )
 
         # decoder for output modalities
@@ -1126,4 +1129,4 @@ class MIMO_Transformer(Module):
         msg += textwrap.indent("\n\ndecoder={}".format(self.nets["decoder"]), indent)
         msg = header + '(' + msg + '\n)'
         return msg
-        
+
