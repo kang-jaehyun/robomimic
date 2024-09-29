@@ -348,9 +348,6 @@ def main(args):
     if args.dataset is not None:
         config.train.data = args.dataset
 
-    if args.name is not None:
-        config.experiment.name = args.name
-
     if args.ckpt is not None:
         config.experiment.ckpt_path = args.ckpt
 
@@ -362,8 +359,12 @@ def main(args):
         
     if "train" in config.experiment.logging.wandb_proj_name:
         config.experiment.logging.wandb_proj_name = config.experiment.logging.wandb_proj_name.replace("train", "rollout")
+    
+    if args.name is not None:
+        config.experiment.name = "_".join([config.experiment.name, args.name])
         
-    config.experiment.name = os.path.join(config.experiment.name, "seed_{}".format(config.train.seed))
+    config.experiment.name = os.path.join(config.experiment.name, f"epoch_{args.epoch}/rolloutseed_{config.train.seed}")
+    
     config.train.output_dir = os.path.join(config.train.output_dir, f'rollout')
     
     # get torch device
