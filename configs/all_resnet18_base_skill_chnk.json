@@ -1,7 +1,7 @@
 {
     "algo_name": "bc",
     "experiment": {
-        "name": "human_multitask_base_skill_chnk",
+        "name": "human_multitask_base_skill_chunk",
         "validate": false,
         "logging": {
             "terminal_output_to_txt": true,
@@ -28,7 +28,7 @@
         "keep_all_videos": false,
         "video_skip": 5,
         "rollout": {
-            "enabled": true,
+            "enabled": false,
             "n": 20,
             "horizon": 500,
             "rate": 100,
@@ -85,7 +85,7 @@
             {
                 "path": "/workspace/robocasa/datasets/v0.1/single_stage/kitchen_pnp/PnPCounterToSink/2024-04-25/demo_gentex_im128_randcams_skill.hdf5",
                 "horizon": 700,
-                "do_eval": true,
+                "do_eval": false,
                 "filter_key": "50_demos"
             },
             {
@@ -238,7 +238,7 @@
         "goal_mode": null,
         "cuda": true,
         "batch_size": 32,
-        "num_epochs": 500,
+        "num_epochs": 1000,
         "max_grad_norm": 100.0,
         "seed": 0,
         "action_config": {
