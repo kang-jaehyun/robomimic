@@ -812,13 +812,26 @@ class BC_Transformer_SkillConditioned(BC):
         assert self.algo_config.transformer.enabled
 
         self.nets = nn.ModuleDict()
-        self.nets["policy"] = PolicyNets.TransformerSkillActorNetwork(
-            obs_shapes=self.obs_shapes,
-            goal_shapes=self.goal_shapes,
-            ac_dim=self.ac_dim,
-            encoder_kwargs=ObsUtils.obs_encoder_kwargs_from_config(self.obs_config.encoder),
-            **BaseNets.transformer_args_from_config(self.algo_config.transformer),
-        )
+        
+        if self.algo_config.transformer.skill2action:
+            # assume that we are predicting future actions
+            assert self.algo_config.transformer.pred_future_acs and self.algo_config.transformer.supervise_all_steps
+            
+            self.nets["policy"] = PolicyNets.TransformerSkill2ActionNetwork(
+                obs_shapes=self.obs_shapes,
+                goal_shapes=self.goal_shapes,
+                ac_dim=self.ac_dim,
+                encoder_kwargs=ObsUtils.obs_encoder_kwargs_from_config(self.obs_config.encoder),
+                **BaseNets.transformer_args_from_config(self.algo_config.transformer),
+            )
+        else: 
+            self.nets["policy"] = PolicyNets.TransformerSkillActorNetwork(
+                obs_shapes=self.obs_shapes,
+                goal_shapes=self.goal_shapes,
+                ac_dim=self.ac_dim,
+                encoder_kwargs=ObsUtils.obs_encoder_kwargs_from_config(self.obs_config.encoder),
+                **BaseNets.transformer_args_from_config(self.algo_config.transformer),
+            )
         self._set_params_from_config()
 
         self.nets = self.nets.float().to(self.device)
@@ -880,7 +893,7 @@ class BC_Transformer_SkillConditioned(BC):
         """
         losses = OrderedDict()
         a_target = batch["actions"]
-        l_target = batch['latent_action']
+        l_target = batch['latent_action'][:, -1:, :] # only the last skill
 
         actions = predictions["actions"]
         skills = predictions['skills']

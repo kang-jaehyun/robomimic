@@ -289,11 +289,12 @@ class SelfAttention(Module):
         # enforce shape consistency
         assert len(x.shape) == 3
         B, T, D = x.shape
-        assert (
-            T <= self.context_length
-        ), "self-attention module can only handle sequences up to {} in length but got length {}".format(
-            self.context_length, T
-        )
+        ### DISABLE assertion for skill2action variation
+        # assert (
+        #     T <= self.context_length
+        # ), "self-attention module can only handle sequences up to {} in length but got length {}".format(
+        #     self.context_length, T
+        # )
         assert D == self.embed_dim
         NH = self.num_heads  # number of attention heads
         DH = D // NH  # embed dimension for each attention head
@@ -464,6 +465,7 @@ class GPT_Backbone(Module):
         num_layers=6,
         num_heads=8,
         activation="gelu",
+        skill2action=False,
         causal=True,
     ):
         """
@@ -494,6 +496,7 @@ class GPT_Backbone(Module):
         self.attn_dropout = attn_dropout
         self.block_output_dropout = block_output_dropout
         self.causal = causal
+        self.skill2action = skill2action
         
         if activation == "gelu":
             self.activation = nn.GELU()
@@ -566,7 +569,14 @@ class GPT_Backbone(Module):
         return input_shape[:-1] + [self.output_dim]
 
     def forward(self, inputs):
-        assert inputs.shape[1:] == (self.context_length, self.embed_dim), inputs.shape
-        x = self.nets["transformer"](inputs)
+        if self.skill2action:
+            assert inputs.shape[1:] == (self.context_length * 2, self.embed_dim), inputs.shape
+            x = self.nets["transformer"](inputs)[:, :self.context_length]
+        else:
+            assert inputs.shape[1:] == (self.context_length, self.embed_dim), inputs.shape
+            x = self.nets["transformer"](inputs)
+            
         transformer_output = self.nets["output_ln"](x)
         return transformer_output
+    
+    
