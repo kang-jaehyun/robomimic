@@ -1001,6 +1001,7 @@ class BC_Transformer_SkillConditioned(BC):
         input_batch["obs"] = {k: batch["obs"][k][:, :h, :] for k in batch["obs"]}
         input_batch["goal_obs"] = batch.get("goal_obs", None) # goals may not be present
 
+        
         if self.supervise_all_steps:
             # supervision on entire sequence (instead of just current timestep)
             if self.pred_future_acs:
@@ -1017,7 +1018,10 @@ class BC_Transformer_SkillConditioned(BC):
                 
         if self.pred_future_acs:
             assert input_batch["actions"].shape[1] == h
-
+        
+        if self.algo_config.transformer.gtskill:
+            input_batch['obs']['gtskill'] = input_batch['latent_action']
+            
         input_batch = TensorUtils.to_device(TensorUtils.to_float(input_batch), self.device)
         return input_batch
 

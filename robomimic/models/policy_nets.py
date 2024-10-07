@@ -1364,6 +1364,7 @@ class TransformerSkill2ActionNetwork(MIMO_Transformer):
         transformer_activation="gelu",
         transformer_nn_parameter_for_timesteps=False,
         skill2action=True,
+        gtskill=False,
         causal=False,
         goal_shapes=None,
         encoder_kwargs=None,
@@ -1451,6 +1452,8 @@ class TransformerSkill2ActionNetwork(MIMO_Transformer):
             skill2action=skill2action,
             encoder_kwargs=encoder_kwargs,
         )
+        
+        self.gtskill = gtskill
         self.skill_dim = skill_dim
         self.nets['skill_encoder'] = vision_models.resnet18(pretrained=False)
         self.nets['skill_encoder'].fc = nn.Linear(512, skill_dim)
@@ -1535,10 +1538,15 @@ class TransformerSkill2ActionNetwork(MIMO_Transformer):
             inputs, self.nets["encoder"], inputs_as_kwargs=True
         )
         assert transformer_inputs.ndim == 3  # [B, T, D]
-
+        
+        # gt skill injection
         B, T, C, H, W = inputs['obs']['robot0_agentview_left_image'].shape
-        current_skill = self.nets['skill_encoder'](inputs['obs']['robot0_agentview_left_image'][:, -1, ...])
-        current_skill = current_skill.reshape(B, 1, -1)
+        
+        if self.gtskill:
+            current_skill = inputs['obs']['gtskill'][:, -1:, :]
+        else:
+            current_skill = self.nets['skill_encoder'](inputs['obs']['robot0_agentview_left_image'][:, -1, ...])
+            current_skill = current_skill.reshape(B, 1, -1)
     
         skill_emb = self.nets['skill_projection'](current_skill).repeat(1, T, 1) # TODO: actually not T, should be action chunking size
         
