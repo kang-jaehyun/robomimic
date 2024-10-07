@@ -1239,6 +1239,13 @@ class TransformerSkillActorNetwork(MIMO_Transformer):
         self.nets['skill_encoder'] = vision_models.resnet18(pretrained=True)
         self.nets['skill_encoder'].fc = nn.Linear(512, skill_dim)
         
+        # load pre-trained weight
+        state_dict = torch.load('/workspace/robomimic/expdata/actiondiffusion_robocasa/human50_resnet18/train/base_sa_skill_future/seed_0/20240927101045/models/skillencoder.pth')
+        self.nets['skill_encoder'].load_state_dict(state_dict)
+        # freeze the skill encoder
+        for param in self.nets['skill_encoder'].parameters():
+            param.requires_grad = False
+        
         transformer_input_dim = self.nets["encoder"].output_shape()[0]
         self.nets['skill_projection'] = nn.Linear(skill_dim, skill_dim)
         self.nets['embed_encoder'] = nn.Linear(transformer_input_dim + skill_dim, 512) # 512 = transformer_embed_dim
