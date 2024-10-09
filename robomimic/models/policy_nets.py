@@ -1460,10 +1460,13 @@ class TransformerSkill2ActionNetwork(MIMO_Transformer):
         # load weight for skill encoder
         self.nets['skill_encoder'].load_state_dict(torch.load('/workspace/robomimic/expdata/skillencoder.pth'))
         
+        # learnable embeddding for skill (1,1,512)
+        self.skill_pos_embed = nn.Parameter(torch.randn(1, 1, 512))
         
         transformer_input_dim = self.nets["encoder"].output_shape()[0]
         self.nets['skill_projection'] = nn.Linear(skill_dim, 512)
         # I think we can try discretization here
+        
 
     def _get_output_shapes(self):
         """
@@ -1548,8 +1551,9 @@ class TransformerSkill2ActionNetwork(MIMO_Transformer):
             current_skill = self.nets['skill_encoder'](inputs['obs']['robot0_agentview_left_image'][:, -1, ...])
             current_skill = current_skill.reshape(B, 1, -1)
     
-        skill_emb = self.nets['skill_projection'](current_skill).repeat(1, T, 1) # TODO: actually not T, should be action chunking size
         
+        skill_emb = self.nets['skill_projection'](current_skill).repeat(1, T, 1) # TODO: actually not T, should be action chunking size
+        skill_emb = skill_emb + self.skill_pos_embed.repeat(B, T, 1)
         
         if transformer_encoder_outputs is None:
             transformer_embeddings = self.input_embedding(transformer_inputs)
