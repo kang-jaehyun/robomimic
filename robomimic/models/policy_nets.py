@@ -1150,6 +1150,7 @@ class TransformerSkillActorNetwork(MIMO_Transformer):
         transformer_activation="gelu",
         transformer_nn_parameter_for_timesteps=False,
         causal=False,
+        gtskill=False,
         goal_shapes=None,
         encoder_kwargs=None,
         skill_dim=384, # TODO configurable
@@ -1363,7 +1364,6 @@ class TransformerSkill2ActionNetwork(MIMO_Transformer):
         transformer_sinusoidal_embedding=False,
         transformer_activation="gelu",
         transformer_nn_parameter_for_timesteps=False,
-        skill2action=True,
         gtskill=False,
         causal=False,
         goal_shapes=None,
