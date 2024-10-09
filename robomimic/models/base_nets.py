@@ -55,6 +55,7 @@ def transformer_args_from_config(transformer_config):
         transformer_activation=transformer_config.activation,
         transformer_nn_parameter_for_timesteps=transformer_config.nn_parameter_for_timesteps,
         causal=transformer_config.causal,
+        gtskill=transformer_config.gtskill,
     )
     
     if "num_layers" in transformer_config:
