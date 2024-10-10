@@ -44,7 +44,7 @@ from robomimic.utils.log_utils import PrintLogger, DataLogger, flush_warnings
 
 
 
-def rollout(config, device, epoch=0):
+def rollout(config, device, epoch=0, task='opendrawer'):
     """
     Train a model using the algorithm.
     """
@@ -113,6 +113,11 @@ def rollout(config, device, epoch=0):
         # do_eval = dataset_cfg.get("do_eval", True)
         # if do_eval is not True:
         #     continue
+        
+        # hardcoded task definition for now
+        if task.lower() not in dataset_cfg.get('path').lower():
+            continue
+        
         eval_env_meta_list.append(env_meta_list[dataset_i])
         eval_shape_meta_list.append(shape_meta_list[dataset_i])
         eval_env_name_list.append(env_meta_list[dataset_i]["env_name"])
@@ -395,7 +400,7 @@ def main(args):
     # catch error during training and print it
     res_str = "finished run successfully!"
     try:
-        rollout(config, device=device, epoch=args.epoch)
+        rollout(config, device=device, epoch=args.epoch, task=args.task)
     except Exception as e:
         res_str = "run failed with error:\n{}\n\n{}".format(e, traceback.format_exc())
     print(res_str)
@@ -443,7 +448,13 @@ if __name__ == "__main__":
         default=None,
         help="(optional) if provided, override the dataset path defined in the config",
     )
-
+    
+    parser.add_argument(
+        "--task",
+        type=str,
+        default='opendrawer',
+        help="(optional) if provided, override the dataset path defined in the config",
+    )
     # debug mode
     parser.add_argument(
         "--debug",
