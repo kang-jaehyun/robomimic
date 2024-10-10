@@ -1151,6 +1151,7 @@ class TransformerSkillActorNetwork(MIMO_Transformer):
         transformer_nn_parameter_for_timesteps=False,
         causal=False,
         gtskill=False,
+        skill2action=False,
         goal_shapes=None,
         encoder_kwargs=None,
         skill_dim=384, # TODO configurable
@@ -1366,6 +1367,7 @@ class TransformerSkill2ActionNetwork(MIMO_Transformer):
         transformer_nn_parameter_for_timesteps=False,
         gtskill=False,
         causal=False,
+        skill2action=False,
         goal_shapes=None,
         encoder_kwargs=None,
         skill_dim=384, # TODO configurable
