@@ -44,7 +44,7 @@ from robomimic.utils.log_utils import PrintLogger, DataLogger, flush_warnings
 
 
 
-def rollout(config, device, epoch=0, task='opendrawer'):
+def rollout(config, device, task, epoch=0):
     """
     Train a model using the algorithm.
     """
@@ -368,7 +368,7 @@ def main(args):
     if args.name is not None:
         config.experiment.name = "_".join([config.experiment.name, args.name])
         
-    config.experiment.name = os.path.join(config.experiment.name, f"epoch_{args.epoch}/rolloutseed_{config.train.seed}")
+    config.experiment.name = os.path.join(config.experiment.name, f"{args.task}_epoch_{args.epoch}_rolloutseed_{config.train.seed}")
     
     config.train.output_dir = os.path.join(config.train.output_dir, f'rollout')
     
