@@ -996,6 +996,8 @@ class TransformerActorNetwork(MIMO_Transformer):
         transformer_activation="gelu",
         transformer_nn_parameter_for_timesteps=False,
         goal_shapes=None,
+        gtskill=False,
+        skill2action=False,
         causal=False,
         encoder_kwargs=None,
     ):
@@ -1460,10 +1462,10 @@ class TransformerSkill2ActionNetwork(MIMO_Transformer):
         self.nets['skill_encoder'] = vision_models.resnet18(pretrained=False)
         self.nets['skill_encoder'].fc = nn.Linear(512, skill_dim)
         # load weight for skill encoder
-        self.nets['skill_encoder'].load_state_dict(torch.load('/workspace/robomimic/expdata/skillencoder.pth'))
+        # self.nets['skill_encoder'].load_state_dict(torch.load('/workspace/robomimic/expdata/skillencoder.pth'))
         
         # learnable embeddding for skill (1,1,512)
-        self.skill_pos_embed = nn.Parameter(torch.randn(1, 1, 512))
+        # self.skill_pos_embed = nn.Parameter(torch.randn(1, 1, 512))
         
         transformer_input_dim = self.nets["encoder"].output_shape()[0]
         self.nets['skill_projection'] = nn.Linear(skill_dim, 512)
@@ -1555,7 +1557,7 @@ class TransformerSkill2ActionNetwork(MIMO_Transformer):
     
         
         skill_emb = self.nets['skill_projection'](current_skill).repeat(1, T, 1) # TODO: actually not T, should be action chunking size
-        skill_emb = skill_emb + self.skill_pos_embed.repeat(B, T, 1)
+        # skill_emb = skill_emb + self.skill_pos_embed.repeat(B, T, 1)
         
         if transformer_encoder_outputs is None:
             transformer_embeddings = self.input_embedding(transformer_inputs)
