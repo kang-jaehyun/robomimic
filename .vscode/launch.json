@@ -1,0 +1,43 @@
+{
+    // IntelliSense를 사용하여 가능한 특성에 대해 알아보세요.
+    // 기존 특성에 대한 설명을 보려면 가리킵니다.
+    // 자세한 내용을 보려면 https://go.microsoft.com/fwlink/?linkid=830387을(를) 방문하세요.
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "train_debug",
+            "type": "debugpy",
+            "request": "launch",
+            "cwd": "/workspace/robomimic",
+            "program": "/workspace/robomimic/robomimic/scripts/train.py",
+            "console": "integratedTerminal",
+            "args": [
+                "--config", "/workspace/robomimic/configs/all_resnet18_base_skill2action_chnk.json", "--debug"
+            ],
+            "env": {
+                "CUDA_VISIBLE_DEVICES": "0"
+            }
+        },
+        {
+            "name": "rollout",
+            "type": "debugpy",
+            "request": "launch",
+            "justMyCode": false,
+            "cwd": "/workspace/robomimic",
+            "program": "/workspace/robomimic/robomimic/scripts/rollout.py",
+            "console": "integratedTerminal",
+            //justmycode = False
+            "args": [
+                "--config", "/workspace/robomimic/configs/rollout_debug.json","--debug", "--task", "OpenDrawer"
+            ],
+            "env": {
+                "CUDA_VISIBLE_DEVICES": "3", 
+                // "MUJOCO_EGL_DEVICE_ID": "0", 
+                "MUJOCO_GL" : "egl", 
+                "PYOPENGL_PLATFORM": "egl",
+                "XDG_RUNTIME_DIR": "/tmp/runtime-",
+                "DISPLAY": ":99"
+            }
+        }
+    ]
+}
