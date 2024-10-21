@@ -893,7 +893,7 @@ class BC_Transformer_SkillConditioned(BC):
         """
         losses = OrderedDict()
         a_target = batch["actions"]
-        l_target = batch['latent_action'][:, -1:, :] # only the last skill
+        l_target = batch['skill'][:, -1:, :] # only the last skill
 
         actions = predictions["actions"]
         skills = predictions['skills']
@@ -1009,18 +1009,18 @@ class BC_Transformer_SkillConditioned(BC):
             else:
                 ac_start = 0
             input_batch["actions"] = batch["actions"][:, ac_start:ac_start+h, :]
-            input_batch["latent_action"] = batch["latent_action"][:, ac_start:ac_start+h, :]
+            input_batch["skill"] = batch["skill"][:, ac_start:ac_start+h, :]
 
         else:
             # just use current timestep
             input_batch["actions"] = batch["actions"][:, h-1, :]
-            input_batch["latent_action"] = batch["latent_action"][:, h-1, :]
+            input_batch["skill"] = batch["skill"][:, h-1, :]
                 
         if self.pred_future_acs:
             assert input_batch["actions"].shape[1] == h
         
         if self.algo_config.transformer.gtskill:
-            input_batch['obs']['gtskill'] = input_batch['latent_action']
+            input_batch['obs']['gtskill'] = input_batch['skill']
             
         input_batch = TensorUtils.to_device(TensorUtils.to_float(input_batch), self.device)
         return input_batch

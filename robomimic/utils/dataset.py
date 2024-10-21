@@ -124,7 +124,7 @@ class SequenceDataset(torch.utils.data.Dataset):
 
         self.skill = skill
         if self.skill:
-            self.dataset_keys = tuple(set(self.dataset_keys).union(set(["latent_action"])))
+            self.dataset_keys = tuple(set(self.dataset_keys).union(set(["skill"])))
 
         self.action_config = action_config
 
