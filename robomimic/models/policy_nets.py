@@ -1314,8 +1314,8 @@ class TransformerSkillActorNetwork(MIMO_Transformer):
 
         inputs = inputs.copy()
 
-        B, T, C, H, W = inputs['obs']['robot0_agentview_left_image'].shape
-        skills = self.nets['skill_encoder'](inputs['obs']['robot0_agentview_left_image'].reshape(B*T, C, H, W))
+        B, T, C, H, W = inputs['obs']['agentview_rgb'].shape
+        skills = self.nets['skill_encoder'](inputs['obs']['agentview_rgb'].reshape(B*T, C, H, W))
         skills = skills.reshape(B, T, -1)
         skill_detached = skills.detach()
 
@@ -1459,8 +1459,10 @@ class TransformerSkill2ActionNetwork(MIMO_Transformer):
         
         self.gtskill = gtskill
         self.skill_dim = skill_dim
-        self.nets['skill_encoder'] = vision_models.resnet18(pretrained=False)
-        self.nets['skill_encoder'].fc = nn.Linear(512, skill_dim)
+        
+        if not self.gtskill:
+            self.nets['skill_encoder'] = vision_models.resnet18(pretrained=False)
+            self.nets['skill_encoder'].fc = nn.Linear(512, skill_dim)
         # load weight for skill encoder
         # self.nets['skill_encoder'].load_state_dict(torch.load('/workspace/robomimic/expdata/skillencoder.pth'))
         
@@ -1547,12 +1549,12 @@ class TransformerSkill2ActionNetwork(MIMO_Transformer):
         assert transformer_inputs.ndim == 3  # [B, T, D]
         
         # gt skill injection
-        B, T, C, H, W = inputs['obs']['robot0_agentview_left_image'].shape
+        B, T, C, H, W = inputs['obs']['agentview_rgb'].shape
         
         if self.gtskill:
             current_skill = inputs['obs']['gtskill'][:, -1:, :]
         else:
-            current_skill = self.nets['skill_encoder'](inputs['obs']['robot0_agentview_left_image'][:, -1, ...])
+            current_skill = self.nets['skill_encoder'](inputs['obs']['agentview_rgb'][:, -1, ...])
             current_skill = current_skill.reshape(B, 1, -1)
     
         
