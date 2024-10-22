@@ -130,6 +130,9 @@ class SequenceDataset(torch.utils.data.Dataset):
 
         # set up lang and language embedding
         self.dataset_lang = dataset_lang # language for entire dataset
+        
+        if "libero" in hdf5_path.lower():
+            self.dataset_lang = os.path.basename(hdf5_path).replace('_demo.hdf5', "")
 
         self.n_frame_stack = frame_stack
         assert self.n_frame_stack >= 1
@@ -579,11 +582,16 @@ class SequenceDataset(torch.utils.data.Dataset):
 
         # also return the sampled index
         meta["index"] = index
-
+        # meta['lang_str'] = self._demo_id_to_demo_lang_str[demo_id]
+        
         if demo_id in self._demo_id_to_demo_lang_emb:
             # language embedding
             T = meta["actions"].shape[0]
-            meta["obs"][LANG_EMB_KEY] = np.tile(
+            # meta["obs"][LANG_EMB_KEY] = np.tile(
+            #     self._demo_id_to_demo_lang_emb[demo_id],
+            #     (T, 1)
+            # )
+            meta[LANG_EMB_KEY] = np.tile(
                 self._demo_id_to_demo_lang_emb[demo_id],
                 (T, 1)
             )

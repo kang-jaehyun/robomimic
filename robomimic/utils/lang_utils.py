@@ -5,11 +5,14 @@ from transformers import AutoModel, pipeline, AutoTokenizer, CLIPTextModelWithPr
 class LangEncoder:
     def __init__(self, device):
         os.environ["TOKENIZERS_PARALLELISM"] = "true" # needed to suppress warning about potential deadlock
-        model_variant = "openai/clip-vit-large-patch14" #"openai/clip-vit-base-patch32"
+        # model_variant = "openai/clip-vit-large-patch14" #"openai/clip-vit-base-patch32"
+        model_variant = "openai/clip-vit-base-patch32"
         self.device = device
+        # self.text_encoder = CLIPTextModelWithProjection.from_pretrained("openai/clip-vit-base-patch32")
+        # self.tokenizer = AutoTokenizer.from_pretrained("openai/clip-vit-base-patch32")
+        
         self.lang_emb_model = CLIPTextModelWithProjection.from_pretrained(
             model_variant,
-            cache_dir=os.path.expanduser("~/tmp/clip")
         ).to(device).eval()
         self.tz = AutoTokenizer.from_pretrained(model_variant, TOKENIZERS_PARALLELISM=True)
 

@@ -1000,7 +1000,7 @@ class BC_Transformer_SkillConditioned(BC):
         h = self.context_length
         input_batch["obs"] = {k: batch["obs"][k][:, :h, :] for k in batch["obs"]}
         input_batch["goal_obs"] = batch.get("goal_obs", None) # goals may not be present
-
+        input_batch['lang_emb'] = batch.get('lang_emb', None)
         
         if self.supervise_all_steps:
             # supervision on entire sequence (instead of just current timestep)
@@ -1047,12 +1047,40 @@ class BC_Transformer_SkillConditioned(BC):
 
         predictions = OrderedDict()
         
-        predictions["actions"], predictions['skills'] = self.nets["policy"](obs_dict=batch["obs"], actions=None, goal_dict=batch["goal_obs"])
+        predictions["actions"], predictions['skills'] = self.nets["policy"](obs_dict=batch["obs"], actions=None, goal_dict=batch["goal_obs"], lang_emb=batch['lang_emb'])
         if not self.supervise_all_steps:
             # only supervise final timestep
             predictions["actions"] = predictions["actions"][:, -1, :]
         return predictions
+    
+    def postprocess_batch_for_training(self, batch, obs_normalization_stats):
+        """
+        Does some operations (like channel swap, uint8 to float conversion, normalization)
+        after @process_batch_for_training is called, in order to ensure these operations
+        take place on GPU.
 
+        Args:
+            batch (dict): dictionary with torch.Tensors sampled
+                from a data loader. Assumed to be on the device where
+                training will occur (after @process_batch_for_training
+                is called)
+
+            obs_normalization_stats (dict or None): if provided, this should map observation 
+                keys to dicts with a "mean" and "std" of shape (1, ...) where ... is the 
+                default shape for the observation.
+
+        Returns:
+            batch (dict): postproceesed batch
+        """
+        obs_keys = ["obs", "next_obs", "goal_obs"]
+        for k in obs_keys:
+            if k in batch and batch[k] is not None:
+                batch[k] = ObsUtils.process_obs_dict(batch[k])
+                if obs_normalization_stats is not None:
+                    batch[k] = ObsUtils.normalize_dict(batch[k], obs_normalization_stats=obs_normalization_stats)
+
+        return batch
+    
     def get_action(self, obs_dict, goal_dict=None):
         """
         Get policy action outputs.

@@ -22,7 +22,8 @@ from robomimic.models.transformers import GPT_Backbone
 from robomimic.models.obs_nets import MIMO_MLP, RNN_MIMO_MLP, MIMO_Transformer, ObservationDecoder
 from robomimic.models.vae_nets import VAE
 from robomimic.models.distributions import TanhWrappedDistribution
-
+from transformers import Dinov2Model, AutoImageProcessor, CLIPTextModel, AutoTokenizer
+from .transformers import SelfAttention
 
 class ActorNetwork(MIMO_MLP):
     """
@@ -1461,13 +1462,18 @@ class TransformerSkill2ActionNetwork(MIMO_Transformer):
         self.skill_dim = skill_dim
         
         if not self.gtskill:
-            self.nets['skill_encoder'] = vision_models.resnet18(pretrained=False)
-            self.nets['skill_encoder'].fc = nn.Linear(512, skill_dim)
+            self.nets['skill_encoder'] = SkillEncoder(
+                                                d_model=512,
+                                                seq_len=256,
+                                                lang_dim=512,
+                                                vis_dim=384,
+                                                n_heads=8,
+                                        )
         # load weight for skill encoder
         # self.nets['skill_encoder'].load_state_dict(torch.load('/workspace/robomimic/expdata/skillencoder.pth'))
         
         # learnable embeddding for skill (1,1,512)
-        # self.skill_pos_embed = nn.Parameter(torch.randn(1, 1, 512))
+        self.skill_pos_embed = nn.Parameter(torch.randn(1, 1, 512))
         
         transformer_input_dim = self.nets["encoder"].output_shape()[0]
         self.nets['skill_projection'] = nn.Linear(skill_dim, 512)
@@ -1492,7 +1498,7 @@ class TransformerSkill2ActionNetwork(MIMO_Transformer):
                 msg="TransformerSkillActorNetwork: input_shape inconsistent in temporal dimension")
         return [T, self.ac_dim]
 
-    def forward(self, obs_dict, actions=None, goal_dict=None):
+    def forward(self, obs_dict, actions=None, goal_dict=None, lang_emb=None):
         """
         Forward a sequence of inputs through the Transformer.
         Args:
@@ -1504,13 +1510,14 @@ class TransformerSkill2ActionNetwork(MIMO_Transformer):
             outputs (torch.Tensor or dict): contains predicted action sequence, or dictionary
                 with predicted action sequence and predicted observation sequences
         """
+        
         if self._is_goal_conditioned:
             assert goal_dict is not None
             # repeat the goal observation in time to match dimension with obs_dict
             mod = list(obs_dict.keys())[0]
             goal_dict = TensorUtils.unsqueeze_expand_at(goal_dict, size=obs_dict[mod].shape[1], dim=1)
 
-        forward_kwargs = dict(obs=obs_dict, goal=goal_dict)
+        forward_kwargs = dict(obs=obs_dict, goal=goal_dict, lang_emb=lang_emb)
         outputs = self._forward(**forward_kwargs)
 
         # apply tanh squashing to ensure actions are in [-1, 1]
@@ -1554,12 +1561,12 @@ class TransformerSkill2ActionNetwork(MIMO_Transformer):
         if self.gtskill:
             current_skill = inputs['obs']['gtskill'][:, -1:, :]
         else:
-            current_skill = self.nets['skill_encoder'](inputs['obs']['agentview_rgb'][:, -1, ...])
+            current_skill = self.nets['skill_encoder'](inputs)
             current_skill = current_skill.reshape(B, 1, -1)
-    
+
         
         skill_emb = self.nets['skill_projection'](current_skill).repeat(1, T, 1) # TODO: actually not T, should be action chunking size
-        # skill_emb = skill_emb + self.skill_pos_embed.repeat(B, T, 1)
+        skill_emb = skill_emb + self.skill_pos_embed.repeat(B, T, 1)
         
         if transformer_encoder_outputs is None:
             transformer_embeddings = self.input_embedding(transformer_inputs)
@@ -2022,3 +2029,100 @@ class VAEActor(Module):
             mod = list(obs_dict.keys())[0]
             n = obs_dict[mod].shape[0]
         return self.decode(obs_dict=obs_dict, goal_dict=goal_dict, z=z, n=n)["action"]
+
+
+class SkillEncoder(Module):
+    """
+    A skill encoder that maps observations to skill latents.
+    """
+    def __init__(
+        self,
+        skill_dim=384,
+        d_model=512,
+        seq_len=256,
+        lang_dim=512,
+        vis_dim=384,
+        n_heads=8,
+        num_layers=6,
+    ):
+        """
+        Args:
+            obs_shapes (OrderedDict): a dictionary that maps modality to
+                expected shapes for observations.
+
+            skill_dim (int): dimension of skill space.
+
+            encoder_layer_dims (list): list of layer dimensions for encoder
+
+            encoder_kwargs (dict): dictionary of kwargs for encoder network
+        """
+        super(SkillEncoder, self).__init__()
+
+        # self.obs_shapes = obs_shapes
+
+        self.num_layers = num_layers
+        self.skill_dim = skill_dim
+        self.visual_processor = AutoImageProcessor.from_pretrained("facebook/dinov2-small")
+        self.visual_encoder = Dinov2Model.from_pretrained("facebook/dinov2-small")
+        self.visual_encoder.requires_grad_(False)
+        
+        self.cls_token = nn.Parameter(torch.randn(1, 1, d_model))
+        self.pos_embed = nn.Parameter(torch.randn(1, seq_len, d_model))
+        
+        
+        self.vis_proj = nn.Linear(vis_dim, d_model)
+        self.lang_proj = nn.Linear(lang_dim, d_model)
+        
+        # self attention
+        
+        self.transformer = nn.Sequential(
+            *[
+                nn.Sequential(
+                    SelfAttention(
+                        embed_dim=d_model,
+                        num_heads=n_heads,
+                        context_length=seq_len + 2,
+                    ),
+                    nn.LayerNorm(d_model)
+                )
+                for _ in range(self.num_layers)
+            ]
+        )
+        self.skill_out = nn.Linear(d_model, skill_dim)
+
+    def forward(self, inputs):
+        """
+        Args:
+            obs_dict (dict): a dictionary that maps modalities to torch.Tensor
+                batches. These should correspond to the observation modalities 
+                used for conditioning in either the decoder or the prior (or both).
+
+        Returns:
+            skill (torch.Tensor): batch of skill latents
+        """
+        B, T, C, H, W = inputs['obs']['agentview_rgb'].shape
+        
+        assert inputs['lang_emb'] is not None
+        
+        lang_emb = inputs['lang_emb'][:, 0, :] # B, 512
+        
+        images = torch.tensor(np.stack(self.visual_processor(inputs['obs']['agentview_rgb'][:, -1, ...]*255).pixel_values)).to(lang_emb.device)
+        features = self.visual_encoder(images).last_hidden_state[:, 1:, :] # B, 256, 384
+        features = self.vis_proj(features)
+        features += self.pos_embed
+        
+        lang_emb = self.lang_proj(lang_emb).unsqueeze(1)
+        
+        transformer_inputs = torch.cat([self.cls_token.repeat(B, 1, 1), features, lang_emb], dim=1)
+        
+        out = self.transformer(transformer_inputs)
+        skill = self.skill_out(out[:, 0, :])
+        
+        return skill
+
+    def output_shape(self, input_shape=None):
+        """
+        This implementation is required by the Module superclass, but is unused since we 
+        never chain this module to other ones.
+        """
+        return [self.skill_dim]
