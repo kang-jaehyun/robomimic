@@ -1081,7 +1081,7 @@ class BC_Transformer_SkillConditioned(BC):
 
         return batch
     
-    def get_action(self, obs_dict, goal_dict=None):
+    def get_action(self, obs_dict, goal_dict=None, lang_emb=None):
         """
         Get policy action outputs.
         Args:
@@ -1092,7 +1092,7 @@ class BC_Transformer_SkillConditioned(BC):
         """
         assert not self.nets.training
 
-        action, skill = self.nets["policy"](obs_dict, actions=None, goal_dict=goal_dict)
+        action, skill = self.nets["policy"](obs_dict, actions=None, goal_dict=goal_dict, lang_emb=lang_emb)
 
         if self.supervise_all_steps:
             if self.algo_config.transformer.pred_future_acs:

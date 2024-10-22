@@ -668,7 +668,7 @@ class RolloutPolicy(object):
         """Pretty print network description"""
         return self.policy.__repr__()
 
-    def __call__(self, ob, goal=None, batched=False):
+    def __call__(self, ob, goal=None, lang_emb=None, batched=False):
         """
         Produce action from raw observation dict (and maybe goal dict) from environment.
 
@@ -681,7 +681,7 @@ class RolloutPolicy(object):
         ob = self._prepare_observation(ob, batched=batched)
         if goal is not None:
             goal = self._prepare_observation(goal, batched=batched)
-        ac = self.policy.get_action(obs_dict=ob, goal_dict=goal)
+        ac = self.policy.get_action(obs_dict=ob, goal_dict=goal, lang_emb=lang_emb)
         if not batched:
             ac = ac[0]
         ac = TensorUtils.to_numpy(ac)
