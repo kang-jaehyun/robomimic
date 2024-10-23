@@ -944,17 +944,17 @@ class BC_Transformer_SkillConditioned(BC):
         log = super(BC, self).log_info(info)
         log["Loss"] = info["losses"]["action_loss"].item()
         log["Skill_Loss"] = info["losses"]["skill_loss"].item()
-        if "action_l2_loss" in info["losses"]:
+        if "action_l2_loss" in info["losses"] and self.algo_config.loss.l2_weight:
             log["L2_Loss"] = info["losses"]["action_l2_loss"].item()
-        if "action_l1_loss" in info["losses"]:
+        if "action_l1_loss" in info["losses"] and self.algo_config.loss.l1_weight:
             log["L1_Loss"] = info["losses"]["action_l1_loss"].item()
-        if "action_cos_loss" in info["losses"]:
+        if "action_cos_loss" in info["losses"] and self.algo_config.loss.cos_weight:
             log["Cosine_Loss"] = info["losses"]["action_cos_loss"].item()
-        if "skill_l2_loss" in info["losses"]:
+        if "skill_l2_loss" in info["losses"] and self.algo_config.loss.l2_weight:
             log["Skill_L2_Loss"] = info["losses"]["skill_l2_loss"].item()
-        if "skill_l1_loss" in info["losses"]:
+        if "skill_l1_loss" in info["losses"] and self.algo_config.loss.l1_weight:
             log["Skill_L1_Loss"] = info["losses"]["skill_l1_loss"].item()
-        if "skill_cos_loss" in info["losses"]:
+        if "skill_cos_loss" in info["losses"] and self.algo_config.loss.cos_weight:
             log["Skill_Cosine_Loss"] = info["losses"]["skill_cos_loss"].item()
         if "policy_grad_norms" in info:
             log["Policy_Grad_Norms"] = info["policy_grad_norms"]
