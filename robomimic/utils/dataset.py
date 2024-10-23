@@ -132,7 +132,7 @@ class SequenceDataset(torch.utils.data.Dataset):
         self.dataset_lang = dataset_lang # language for entire dataset
         
         if "libero" in hdf5_path.lower():
-            self.dataset_lang = os.path.basename(hdf5_path).replace('_demo.hdf5', "")
+            self.dataset_lang = os.path.basename(hdf5_path).replace('_demo.hdf5', "").replace('_', ' ')
 
         self.n_frame_stack = frame_stack
         assert self.n_frame_stack >= 1

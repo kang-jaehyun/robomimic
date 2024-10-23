@@ -1374,6 +1374,7 @@ class TransformerSkill2ActionNetwork(MIMO_Transformer):
         goal_shapes=None,
         encoder_kwargs=None,
         skill_dim=384, # TODO configurable
+        skill_detach=True,
     ):
         """
         Args:
@@ -1460,7 +1461,7 @@ class TransformerSkill2ActionNetwork(MIMO_Transformer):
         
         self.gtskill = gtskill
         self.skill_dim = skill_dim
-        
+        self.skill_detach = skill_detach
         if not self.gtskill:
             self.nets['skill_encoder'] = SkillEncoder(
                                                 d_model=512,
@@ -1564,8 +1565,12 @@ class TransformerSkill2ActionNetwork(MIMO_Transformer):
             current_skill = self.nets['skill_encoder'](inputs)
             current_skill = current_skill.reshape(B, 1, -1)
 
-        
-        skill_emb = self.nets['skill_projection'](current_skill).repeat(1, T, 1) # TODO: actually not T, should be action chunking size
+        if self.skill_detach:
+            skill = current_skill.detach()
+        else:
+            skill = current_skill
+            
+        skill_emb = self.nets['skill_projection'](skill).repeat(1, T, 1) # TODO: actually not T, should be action chunking size
         skill_emb = skill_emb + self.skill_pos_embed.repeat(B, T, 1)
         
         if transformer_encoder_outputs is None:
