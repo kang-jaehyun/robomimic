@@ -67,11 +67,22 @@ class DiffusionPolicyUNet(PolicyAlgo):
         
         obs_dim = obs_encoder.output_shape()[0]
 
-        # create network object
-        noise_pred_net = ConditionalUnet1D(
-            input_dim=self.ac_dim,
-            global_cond_dim=obs_dim*self.algo_config.horizon.observation_horizon
-        )
+        if self.algo_config.skill.enabled:
+            self.skill_dim = self.algo_config.skill.skill_dim
+            self.gtskill = self.algo_config.skill.gtskill
+            
+            assert self.gtskill, "Not implemented"
+            noise_pred_net = ConditionalUnet1D(
+                input_dim=self.ac_dim,
+                global_cond_dim=obs_dim*self.algo_config.horizon.observation_horizon + self.skill_dim
+            )
+        
+        else:
+            # create network object
+            noise_pred_net = ConditionalUnet1D(
+                input_dim=self.ac_dim,
+                global_cond_dim=obs_dim*self.algo_config.horizon.observation_horizon
+            )
 
         # the final arch has 2 parts
         nets = nn.ModuleDict({
@@ -135,9 +146,13 @@ class DiffusionPolicyUNet(PolicyAlgo):
         Tp = self.algo_config.horizon.prediction_horizon
 
         input_batch = dict()
+        input_batch
         input_batch["obs"] = {k: batch["obs"][k][:, :To, :] for k in batch["obs"]}
         input_batch["goal_obs"] = batch.get("goal_obs", None) # goals may not be present
         input_batch["actions"] = batch["actions"][:, :Tp, :]
+        
+        if self.algo_config.skill.enabled:
+            input_batch["skill"] = batch["skill"][:, :To, :]
         
         # check if actions are normalized to [-1,1]
         if not self.action_check_done:
@@ -189,8 +204,12 @@ class DiffusionPolicyUNet(PolicyAlgo):
             
             obs_features = TensorUtils.time_distributed(inputs, self.nets['policy']['obs_encoder'], inputs_as_kwargs=True)
             assert obs_features.ndim == 3  # [B, T, D]
-
+            
             obs_cond = obs_features.flatten(start_dim=1)
+            
+            if self.algo_config.skill.enabled and self.algo_config.skill.gtskill:
+                skill = batch["skill"][:,-1, :] # B, skill_dim
+                obs_cond = torch.cat([obs_cond, skill], axis=-1)
             
             # sample noise to add to actions
             noise = torch.randn(actions.shape, device=self.device)
@@ -267,7 +286,7 @@ class DiffusionPolicyUNet(PolicyAlgo):
         self.obs_queue = obs_queue
         self.action_queue = action_queue
     
-    def get_action(self, obs_dict, goal_dict=None):
+    def get_action(self, obs_dict, goal_dict=None, skill_emb=None, lang_emb=None):
         """
         Get policy action outputs.
 
@@ -311,7 +330,7 @@ class DiffusionPolicyUNet(PolicyAlgo):
         action = action.unsqueeze(0)
         return action
         
-    def _get_action_trajectory(self, obs_dict, goal_dict=None):
+    def _get_action_trajectory(self, obs_dict, goal_dict=None, skill_emb=None, lang_emb=None):
         assert not self.nets.training
         To = self.algo_config.horizon.observation_horizon
         Ta = self.algo_config.horizon.action_horizon
@@ -343,7 +362,10 @@ class DiffusionPolicyUNet(PolicyAlgo):
 
         # reshape observation to (B,obs_horizon*obs_dim)
         obs_cond = obs_features.flatten(start_dim=1)
-
+        if self.algo_config.skill.enabled and self.algo_config.skill.gtskill:
+            skill = skill_emb[:,-1, :]
+            obs_cond = torch.cat([obs_cond, skill], axis=-1)
+        
         # initialize action from Guassian noise
         noisy_action = torch.randn(
             (B, Tp, action_dim), device=self.device)
