@@ -1493,7 +1493,7 @@ class TransformerSkill2ActionNetwork(MIMO_Transformer):
                 msg="TransformerSkillActorNetwork: input_shape inconsistent in temporal dimension")
         return [T, self.ac_dim]
 
-    def forward(self, obs_dict, actions=None, goal_dict=None, lang_emb=None):
+    def forward(self, obs_dict, actions=None, goal_dict=None, lang_emb=None, skill=None):
         """
         Forward a sequence of inputs through the Transformer.
         Args:
@@ -1512,7 +1512,7 @@ class TransformerSkill2ActionNetwork(MIMO_Transformer):
             mod = list(obs_dict.keys())[0]
             goal_dict = TensorUtils.unsqueeze_expand_at(goal_dict, size=obs_dict[mod].shape[1], dim=1)
 
-        forward_kwargs = dict(obs=obs_dict, goal=goal_dict, lang_emb=lang_emb)
+        forward_kwargs = dict(obs=obs_dict, goal=goal_dict, lang_emb=lang_emb, skill=skill)
         outputs = self._forward(**forward_kwargs)
 
         # apply tanh squashing to ensure actions are in [-1, 1]
@@ -1554,7 +1554,7 @@ class TransformerSkill2ActionNetwork(MIMO_Transformer):
         B, T, C, H, W = inputs['obs']['agentview_rgb'].shape
         
         if self.gtskill:
-            current_skill = inputs['obs']['gtskill'][:, -1:, :]
+            current_skill = inputs['skill'][:, -1:, :]
         else:
             # language
             current_skill = self.nets['skill_encoder'](inputs['lang_emb'][:, 0, :])
@@ -2066,7 +2066,7 @@ class SkillEncoder(Module):
         self.visual_encoder.requires_grad_(False)
         
         self.cls_token = nn.Parameter(torch.randn(1, 1, d_model))
-        self.pos_embed = nn.Parameter(torch.randn(1, seq_len, d_model))
+        self.pos_embed = nn.Parameter(torch.randn(1, seq_len+2, d_model)) # vis token + cls token + lang token
         
         
         self.vis_proj = nn.Linear(vis_dim, d_model)
@@ -2106,11 +2106,11 @@ class SkillEncoder(Module):
         images = torch.tensor(np.stack(self.visual_processor(inputs['obs']['agentview_rgb'][:, -1, ...]*255).pixel_values)).to(lang_emb.device)
         features = self.visual_encoder(images).last_hidden_state[:, 1:, :] # B, 256, 384
         features = self.vis_proj(features)
-        features += self.pos_embed
         
         lang_emb = self.lang_proj(lang_emb).unsqueeze(1)
         
         transformer_inputs = torch.cat([self.cls_token.repeat(B, 1, 1), features, lang_emb], dim=1)
+        transformer_inputs = transformer_inputs + self.pos_embed
         
         out = self.transformer(transformer_inputs)
         skill = self.skill_out(out[:, 0, :])
