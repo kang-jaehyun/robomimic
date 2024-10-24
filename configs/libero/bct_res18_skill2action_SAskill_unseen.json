@@ -1,7 +1,7 @@
 {
     "algo_name": "bc",
     "experiment": {
-        "name": "bct_skillenc_skill2action_detach",
+        "name": "[fixed]bct_res18_skill2action_SAskill_unseen",
         "validate": false,
         "logging": {
             "terminal_output_to_txt": true,
@@ -113,7 +113,7 @@
         ],
         "output_dir": "../expdata/actiondiffusion_libero_goal_skill",
         "num_data_workers": 16,
-        "hdf5_cache_mode": null,
+        "hdf5_cache_mode": "low_dim",
         "hdf5_use_swmr": true,
         "hdf5_load_next_obs": false,
         "hdf5_normalize_obs": false,
@@ -128,7 +128,7 @@
         "goal_mode": null,
         "cuda": true,
         "batch_size": 64,
-        "num_epochs": 500,
+        "num_epochs": 700,
         "max_grad_norm": 100.0,
         "seed": 0,
         "action_config": {

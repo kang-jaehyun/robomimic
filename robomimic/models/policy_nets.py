@@ -23,7 +23,7 @@ from robomimic.models.obs_nets import MIMO_MLP, RNN_MIMO_MLP, MIMO_Transformer, 
 from robomimic.models.vae_nets import VAE
 from robomimic.models.distributions import TanhWrappedDistribution
 from transformers import Dinov2Model, AutoImageProcessor, CLIPTextModel, AutoTokenizer
-from .transformers import SelfAttention
+from .transformers import SelfAttentionBlock
 
 class ActorNetwork(MIMO_MLP):
     """
@@ -1157,7 +1157,7 @@ class TransformerSkillActorNetwork(MIMO_Transformer):
         skill2action=False,
         goal_shapes=None,
         encoder_kwargs=None,
-        skill_dim=384, # TODO configurable
+        skill_dim=64, # TODO configurable
     ):
         """
         Args:
@@ -1240,7 +1240,7 @@ class TransformerSkillActorNetwork(MIMO_Transformer):
             causal=causal,
             encoder_kwargs=encoder_kwargs,
         )
-        skill_dim = 384
+        skill_dim = 64
         self.nets['skill_encoder'] = vision_models.resnet18(pretrained=True)
         self.nets['skill_encoder'].fc = nn.Linear(512, skill_dim)
         
@@ -1373,7 +1373,7 @@ class TransformerSkill2ActionNetwork(MIMO_Transformer):
         skill2action=False,
         goal_shapes=None,
         encoder_kwargs=None,
-        skill_dim=384, # TODO configurable
+        skill_dim=64, # TODO configurable
         skill_detach=True,
     ):
         """
@@ -1592,7 +1592,6 @@ class TransformerSkill2ActionNetwork(MIMO_Transformer):
     def _to_string(self):
         """Info to pretty print."""
         return "action_dim={}".format(self.ac_dim)
-
 
 class TransformerGMMActorNetwork(TransformerActorNetwork):
     """
@@ -2042,7 +2041,7 @@ class SkillEncoder(Module):
     """
     def __init__(
         self,
-        skill_dim=384,
+        skill_dim=64,
         d_model=512,
         seq_len=256,
         lang_dim=512,
@@ -2082,13 +2081,11 @@ class SkillEncoder(Module):
         
         self.transformer = nn.Sequential(
             *[
-                nn.Sequential(
-                    SelfAttention(
-                        embed_dim=d_model,
-                        num_heads=n_heads,
-                        context_length=seq_len + 2,
-                    ),
-                    nn.LayerNorm(d_model)
+                SelfAttentionBlock(
+                    embed_dim=d_model,
+                    num_heads=n_heads,
+                    context_length=seq_len + 2,
+                    causal=False,
                 )
                 for _ in range(self.num_layers)
             ]
