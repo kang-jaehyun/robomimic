@@ -71,49 +71,49 @@
     "train": {
         "data": [
             {
-                "path": "datasets/LIBERO/libero_goal/open_the_middle_drawer_of_the_cabinet_demo.hdf5",
+                "path": "datasets/LIBERO/libero_goal_skill/open_the_middle_drawer_of_the_cabinet_demo.hdf5",
                 "horizon": 500,
                 "do_eval": false
             },
             {
-                "path": "datasets/LIBERO/libero_goal/open_the_top_drawer_and_put_the_bowl_inside_demo.hdf5",
+                "path": "datasets/LIBERO/libero_goal_skill/open_the_top_drawer_and_put_the_bowl_inside_demo.hdf5",
                 "horizon": 500,
                 "do_eval": false
             },
             {
-                "path": "datasets/LIBERO/libero_goal/push_the_plate_to_the_front_of_the_stove_demo.hdf5",
+                "path": "datasets/LIBERO/libero_goal_skill/push_the_plate_to_the_front_of_the_stove_demo.hdf5",
                 "horizon": 500,
                 "do_eval": false
             },
             {
-                "path": "datasets/LIBERO/libero_goal/put_the_bowl_on_the_stove_demo.hdf5",
+                "path": "datasets/LIBERO/libero_goal_skill/put_the_bowl_on_the_stove_demo.hdf5",
                 "horizon": 500,
                 "do_eval": false
             },
             {
-                "path": "datasets/LIBERO/libero_goal/put_the_bowl_on_top_of_the_cabinet_demo.hdf5",
+                "path": "datasets/LIBERO/libero_goal_skill/put_the_bowl_on_top_of_the_cabinet_demo.hdf5",
                 "horizon": 500,
                 "do_eval": false
             },
             {
-                "path": "datasets/LIBERO/libero_goal/put_the_cream_cheese_in_the_bowl_demo.hdf5",
+                "path": "datasets/LIBERO/libero_goal_skill/put_the_cream_cheese_in_the_bowl_demo.hdf5",
                 "horizon": 500,
                 "do_eval": false
             },
             {
-                "path": "datasets/LIBERO/libero_goal/put_the_wine_bottle_on_the_rack_demo.hdf5",
+                "path": "datasets/LIBERO/libero_goal_skill/put_the_wine_bottle_on_the_rack_demo.hdf5",
                 "horizon": 500,
                 "do_eval": false
             },
             {
-                "path": "datasets/LIBERO/libero_goal/turn_on_the_stove_demo.hdf5",
+                "path": "datasets/LIBERO/libero_goal_skill/turn_on_the_stove_demo.hdf5",
                 "horizon": 500,
                 "do_eval": false
             }
         ],
         "output_dir": "../expdata/actiondiffusion_libero_goal_skill",
         "num_data_workers": 16,
-        "hdf5_cache_mode": "low_dim",
+        "hdf5_cache_mode": null,
         "hdf5_use_swmr": true,
         "hdf5_load_next_obs": false,
         "hdf5_normalize_obs": false,

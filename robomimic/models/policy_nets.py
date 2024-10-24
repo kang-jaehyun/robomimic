@@ -1499,7 +1499,7 @@ class TransformerSkill2ActionNetwork(MIMO_Transformer):
                 msg="TransformerSkillActorNetwork: input_shape inconsistent in temporal dimension")
         return [T, self.ac_dim]
 
-    def forward(self, obs_dict, actions=None, goal_dict=None, lang_emb=None):
+    def forward(self, obs_dict, actions=None, goal_dict=None, lang_emb=None, skill=None):
         """
         Forward a sequence of inputs through the Transformer.
         Args:
@@ -1518,7 +1518,7 @@ class TransformerSkill2ActionNetwork(MIMO_Transformer):
             mod = list(obs_dict.keys())[0]
             goal_dict = TensorUtils.unsqueeze_expand_at(goal_dict, size=obs_dict[mod].shape[1], dim=1)
 
-        forward_kwargs = dict(obs=obs_dict, goal=goal_dict, lang_emb=lang_emb)
+        forward_kwargs = dict(obs=obs_dict, goal=goal_dict, lang_emb=lang_emb, skill=skill)
         outputs = self._forward(**forward_kwargs)
 
         # apply tanh squashing to ensure actions are in [-1, 1]
@@ -1560,7 +1560,7 @@ class TransformerSkill2ActionNetwork(MIMO_Transformer):
         B, T, C, H, W = inputs['obs']['agentview_rgb'].shape
         
         if self.gtskill:
-            current_skill = inputs['obs']['gtskill'][:, -1:, :]
+            current_skill = inputs['skill'][:, -1:, :]
         else:
             current_skill = self.nets['skill_encoder'](inputs)
             current_skill = current_skill.reshape(B, 1, -1)

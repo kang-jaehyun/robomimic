@@ -1008,19 +1008,21 @@ class BC_Transformer_SkillConditioned(BC):
                 ac_start = h - 1
             else:
                 ac_start = 0
+                raise NotImplementedError
             input_batch["actions"] = batch["actions"][:, ac_start:ac_start+h, :]
-            input_batch["skill"] = batch["skill"][:, ac_start:ac_start+h, :]
+            input_batch["skill"] = batch["skill"][:, :h, :]
 
         else:
             # just use current timestep
+            raise NotImplementedError
             input_batch["actions"] = batch["actions"][:, h-1, :]
             input_batch["skill"] = batch["skill"][:, h-1, :]
                 
         if self.pred_future_acs:
             assert input_batch["actions"].shape[1] == h
         
-        if self.algo_config.transformer.gtskill:
-            input_batch['obs']['gtskill'] = input_batch['skill']
+        # if self.algo_config.transformer.gtskill:
+            # input_batch['gtskill'] = input_batch['skill']
             
         input_batch = TensorUtils.to_device(TensorUtils.to_float(input_batch), self.device)
         return input_batch
@@ -1047,7 +1049,7 @@ class BC_Transformer_SkillConditioned(BC):
 
         predictions = OrderedDict()
         
-        predictions["actions"], predictions['skills'] = self.nets["policy"](obs_dict=batch["obs"], actions=None, goal_dict=batch["goal_obs"], lang_emb=batch['lang_emb'])
+        predictions["actions"], predictions['skills'] = self.nets["policy"](obs_dict=batch["obs"], actions=None, goal_dict=batch["goal_obs"], lang_emb=batch['lang_emb'], skill=batch['skill'])
         if not self.supervise_all_steps:
             # only supervise final timestep
             predictions["actions"] = predictions["actions"][:, -1, :]
@@ -1081,7 +1083,7 @@ class BC_Transformer_SkillConditioned(BC):
 
         return batch
     
-    def get_action(self, obs_dict, goal_dict=None, lang_emb=None):
+    def get_action(self, obs_dict, goal_dict=None, lang_emb=None, skill=None):
         """
         Get policy action outputs.
         Args:
@@ -1092,7 +1094,7 @@ class BC_Transformer_SkillConditioned(BC):
         """
         assert not self.nets.training
 
-        action, skill = self.nets["policy"](obs_dict, actions=None, goal_dict=goal_dict, lang_emb=lang_emb)
+        action, skill = self.nets["policy"](obs_dict, actions=None, goal_dict=goal_dict, lang_emb=lang_emb, skill=skill)
 
         if self.supervise_all_steps:
             if self.algo_config.transformer.pred_future_acs:

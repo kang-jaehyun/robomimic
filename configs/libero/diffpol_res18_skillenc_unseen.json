@@ -1,7 +1,7 @@
 {
     "algo_name": "diffusion_policy",
     "experiment": {
-        "name": "diffpol_res18_gtskill_unseen_bowltoplate",
+        "name": "diffpol_res18_skillenc_unseen_bowltoplate",
         "validate": false,
         "logging": {
             "terminal_output_to_txt": true,
@@ -191,7 +191,7 @@
         "skill": {
             "enabled": true,
             "skill_dim": 64,
-            "gtskill": true
+            "gtskill": false
         },
         "unet": {
             "enabled": true,
