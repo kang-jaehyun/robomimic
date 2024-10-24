@@ -1,7 +1,7 @@
 {
     "algo_name": "bc",
     "experiment": {
-        "name": "bct_libero_gtskill_unseen_bowltoplate",
+        "name": "bct_res18_gtskill_unseen_bowltoplate",
         "validate": false,
         "logging": {
             "terminal_output_to_txt": true,
@@ -176,7 +176,7 @@
                     "initial": 0.0001,
                     "decay_factor": 1.0,
                     "epoch_schedule": [
-                        10
+                        50
                     ],
                     "scheduler_type": "constant_with_warmup"
                 },
