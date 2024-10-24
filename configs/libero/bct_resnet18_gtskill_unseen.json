@@ -1,19 +1,19 @@
 {
     "algo_name": "bc",
     "experiment": {
-        "name": "bct_libero_gtskill",
+        "name": "bct_libero_gtskill_unseen_bowltoplate",
         "validate": false,
         "logging": {
             "terminal_output_to_txt": true,
             "log_tb": true,
             "log_wandb": true,
-            "wandb_proj_name": "actdif_libero_goal"
+            "wandb_proj_name": "libero_goal"
         },
         "mse": {},
         "save": {
             "enabled": true,
             "every_n_seconds": null,
-            "every_n_epochs": 100,
+            "every_n_epochs": 10,
             "epochs": [],
             "on_best_validation": false,
             "on_best_rollout_return": false,
@@ -71,57 +71,51 @@
     "train": {
         "data": [
             {
-                "path": "datasets/LIBERO/libero_goal_skill/open_the_middle_drawer_of_the_cabinet_demo.hdf5",
+                "path": "datasets/LIBERO/libero_goal/open_the_middle_drawer_of_the_cabinet_demo.hdf5",
                 "horizon": 500,
                 "do_eval": false
             },
             {
-                "path": "datasets/LIBERO/libero_goal_skill/open_the_top_drawer_and_put_the_bowl_inside_demo.hdf5",
+                "path": "datasets/LIBERO/libero_goal/open_the_top_drawer_and_put_the_bowl_inside_demo.hdf5",
                 "horizon": 500,
                 "do_eval": false
             },
             {
-                "path": "datasets/LIBERO/libero_goal_skill/push_the_plate_to_the_front_of_the_stove_demo.hdf5",
+                "path": "datasets/LIBERO/libero_goal/push_the_plate_to_the_front_of_the_stove_demo.hdf5",
                 "horizon": 500,
                 "do_eval": false
             },
             {
-                "path": "datasets/LIBERO/libero_goal_skill/put_the_bowl_on_the_plate_demo.hdf5",
+                "path": "datasets/LIBERO/libero_goal/put_the_bowl_on_the_stove_demo.hdf5",
                 "horizon": 500,
                 "do_eval": false
             },
             {
-                "path": "datasets/LIBERO/libero_goal_skill/put_the_bowl_on_the_stove_demo.hdf5",
+                "path": "datasets/LIBERO/libero_goal/put_the_bowl_on_top_of_the_cabinet_demo.hdf5",
                 "horizon": 500,
                 "do_eval": false
             },
             {
-                "path": "datasets/LIBERO/libero_goal_skill/put_the_bowl_on_top_of_the_cabinet_demo.hdf5",
+                "path": "datasets/LIBERO/libero_goal/put_the_cream_cheese_in_the_bowl_demo.hdf5",
                 "horizon": 500,
                 "do_eval": false
             },
             {
-                "path": "datasets/LIBERO/libero_goal_skill/put_the_cream_cheese_in_the_bowl_demo.hdf5",
+                "path": "datasets/LIBERO/libero_goal/put_the_wine_bottle_on_the_rack_demo.hdf5",
                 "horizon": 500,
                 "do_eval": false
             },
             {
-                "path": "datasets/LIBERO/libero_goal_skill/put_the_wine_bottle_on_the_rack_demo.hdf5",
-                "horizon": 500,
-                "do_eval": false
-            },
-            {
-                "path": "datasets/LIBERO/libero_goal_skill/turn_on_the_stove_demo.hdf5",
+                "path": "datasets/LIBERO/libero_goal/turn_on_the_stove_demo.hdf5",
                 "horizon": 500,
                 "do_eval": false
             }
         ],
         "output_dir": "../expdata/actiondiffusion_libero_goal_skill",
-        "num_data_workers": 5,
-        "hdf5_cache_mode": null,
+        "num_data_workers": 16,
+        "hdf5_cache_mode": "low_dim",
         "hdf5_use_swmr": true,
         "hdf5_load_next_obs": false,
-        
         "hdf5_normalize_obs": false,
         "hdf5_filter_key": null,
         "seq_length": 10,
@@ -131,10 +125,10 @@
         "dataset_keys": [
             "actions"
         ],
-        "goal_mode": "last",
+        "goal_mode": null,
         "cuda": true,
-        "batch_size": 32,
-        "num_epochs": 1000,
+        "batch_size": 64,
+        "num_epochs": 300,
         "max_grad_norm": 100.0,
         "seed": 0,
         "action_config": {
@@ -182,7 +176,7 @@
                     "initial": 0.0001,
                     "decay_factor": 1.0,
                     "epoch_schedule": [
-                        100
+                        10
                     ],
                     "scheduler_type": "constant_with_warmup"
                 },
@@ -236,7 +230,6 @@
                 "low_dim": [
                     "ee_ori",
                     "ee_pos",
-                    "ee_states",
                     "gripper_states",
                     "joint_states"
                 ],
@@ -249,7 +242,7 @@
             },
             "goal": {
                 "low_dim": [],
-                "rgb": ["agentview_rgb"],
+                "rgb": [],
                 "depth": [],
                 "scan": []
             }

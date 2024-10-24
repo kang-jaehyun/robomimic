@@ -1,13 +1,13 @@
 {
     "algo_name": "bc",
     "experiment": {
-        "name": "[fixed]bct_res18_skill2action_SAskill_unseen",
+        "name": "bct_res18_skill2action_SAskill_unseen_bowltoplate",
         "validate": false,
         "logging": {
             "terminal_output_to_txt": true,
             "log_tb": true,
             "log_wandb": true,
-            "wandb_proj_name": "actdif_libero_goal"
+            "wandb_proj_name": "libero_goal"
         },
         "mse": {},
         "save": {
@@ -71,42 +71,42 @@
     "train": {
         "data": [
             {
-                "path": "datasets/LIBERO/libero_goal_skill/open_the_top_drawer_and_put_the_bowl_inside_demo.hdf5",
+                "path": "datasets/LIBERO/libero_goal/open_the_middle_drawer_of_the_cabinet_demo.hdf5",
                 "horizon": 500,
                 "do_eval": false
             },
             {
-                "path": "datasets/LIBERO/libero_goal_skill/push_the_plate_to_the_front_of_the_stove_demo.hdf5",
+                "path": "datasets/LIBERO/libero_goal/open_the_top_drawer_and_put_the_bowl_inside_demo.hdf5",
                 "horizon": 500,
                 "do_eval": false
             },
             {
-                "path": "datasets/LIBERO/libero_goal_skill/put_the_bowl_on_the_plate_demo.hdf5",
+                "path": "datasets/LIBERO/libero_goal/push_the_plate_to_the_front_of_the_stove_demo.hdf5",
                 "horizon": 500,
                 "do_eval": false
             },
             {
-                "path": "datasets/LIBERO/libero_goal_skill/put_the_bowl_on_the_stove_demo.hdf5",
+                "path": "datasets/LIBERO/libero_goal/put_the_bowl_on_the_stove_demo.hdf5",
                 "horizon": 500,
                 "do_eval": false
             },
             {
-                "path": "datasets/LIBERO/libero_goal_skill/put_the_bowl_on_top_of_the_cabinet_demo.hdf5",
+                "path": "datasets/LIBERO/libero_goal/put_the_bowl_on_top_of_the_cabinet_demo.hdf5",
                 "horizon": 500,
                 "do_eval": false
             },
             {
-                "path": "datasets/LIBERO/libero_goal_skill/put_the_cream_cheese_in_the_bowl_demo.hdf5",
+                "path": "datasets/LIBERO/libero_goal/put_the_cream_cheese_in_the_bowl_demo.hdf5",
                 "horizon": 500,
                 "do_eval": false
             },
             {
-                "path": "datasets/LIBERO/libero_goal_skill/put_the_wine_bottle_on_the_rack_demo.hdf5",
+                "path": "datasets/LIBERO/libero_goal/put_the_wine_bottle_on_the_rack_demo.hdf5",
                 "horizon": 500,
                 "do_eval": false
             },
             {
-                "path": "datasets/LIBERO/libero_goal_skill/turn_on_the_stove_demo.hdf5",
+                "path": "datasets/LIBERO/libero_goal/turn_on_the_stove_demo.hdf5",
                 "horizon": 500,
                 "do_eval": false
             }
@@ -128,7 +128,7 @@
         "goal_mode": null,
         "cuda": true,
         "batch_size": 64,
-        "num_epochs": 700,
+        "num_epochs": 300,
         "max_grad_norm": 100.0,
         "seed": 0,
         "action_config": {
@@ -176,7 +176,7 @@
                     "initial": 0.0001,
                     "decay_factor": 1.0,
                     "epoch_schedule": [
-                        50
+                        10
                     ],
                     "scheduler_type": "constant_with_warmup"
                 },
