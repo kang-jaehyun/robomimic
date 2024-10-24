@@ -893,10 +893,10 @@ class BC_Transformer_SkillConditioned(BC):
         """
         losses = OrderedDict()
         a_target = batch["actions"]
-        l_target = batch['skill'][:, -1:, :] # only the last skill
+        # l_target = batch['skill'][:, -1:, :] # only the last skill
 
         actions = predictions["actions"]
-        skills = predictions['skills']
+        # skills = predictions['skills']
         
         h = self.context_length
         if not self.supervise_all_steps and not self.pred_future_acs:
@@ -907,10 +907,10 @@ class BC_Transformer_SkillConditioned(BC):
         # cosine direction loss on eef delta position
         losses["action_cos_loss"] = LossUtils.cosine_loss(actions[..., :3], a_target[..., :3])
 
-        losses["skill_l2_loss"] = nn.MSELoss()(skills, l_target)
-        losses["skill_l1_loss"] = nn.SmoothL1Loss()(skills, l_target)
-        # cosine direction loss on eef delta position
-        losses["skill_cos_loss"] = LossUtils.cosine_loss(skills[..., :3], l_target[..., :3])
+        # losses["skill_l2_loss"] = nn.MSELoss()(skills, l_target)
+        # losses["skill_l1_loss"] = nn.SmoothL1Loss()(skills, l_target)
+        # # cosine direction loss on eef delta position
+        # losses["skill_cos_loss"] = LossUtils.cosine_loss(skills[..., :3], l_target[..., :3])
 
 
         action_losses = [
@@ -918,15 +918,15 @@ class BC_Transformer_SkillConditioned(BC):
             self.algo_config.loss.l1_weight * losses["action_l1_loss"],
             self.algo_config.loss.cos_weight * losses["action_cos_loss"],
         ]
-        skill_losses = [
-            self.algo_config.loss.l2_weight * losses["skill_l2_loss"],
-            self.algo_config.loss.l1_weight * losses["skill_l1_loss"],
-            self.algo_config.loss.cos_weight * losses["skill_cos_loss"],
-        ]
+        # skill_losses = [
+        #     self.algo_config.loss.l2_weight * losses["skill_l2_loss"],
+        #     self.algo_config.loss.l1_weight * losses["skill_l1_loss"],
+        #     self.algo_config.loss.cos_weight * losses["skill_cos_loss"],
+        # ]
         action_loss = sum(action_losses)
-        skill_loss = sum(skill_losses)
+        # skill_loss = sum(skill_losses)
 
-        losses['skill_loss'] = skill_loss
+        # losses['skill_loss'] = skill_loss
         losses["action_loss"] = action_loss
         return losses
 
@@ -943,19 +943,19 @@ class BC_Transformer_SkillConditioned(BC):
         """
         log = super(BC, self).log_info(info)
         log["Loss"] = info["losses"]["action_loss"].item()
-        log["Skill_Loss"] = info["losses"]["skill_loss"].item()
+        # log["Skill_Loss"] = info["losses"]["skill_loss"].item()
         if "action_l2_loss" in info["losses"] and self.algo_config.loss.l2_weight:
             log["L2_Loss"] = info["losses"]["action_l2_loss"].item()
         if "action_l1_loss" in info["losses"] and self.algo_config.loss.l1_weight:
             log["L1_Loss"] = info["losses"]["action_l1_loss"].item()
         if "action_cos_loss" in info["losses"] and self.algo_config.loss.cos_weight:
             log["Cosine_Loss"] = info["losses"]["action_cos_loss"].item()
-        if "skill_l2_loss" in info["losses"] and self.algo_config.loss.l2_weight:
-            log["Skill_L2_Loss"] = info["losses"]["skill_l2_loss"].item()
-        if "skill_l1_loss" in info["losses"] and self.algo_config.loss.l1_weight:
-            log["Skill_L1_Loss"] = info["losses"]["skill_l1_loss"].item()
-        if "skill_cos_loss" in info["losses"] and self.algo_config.loss.cos_weight:
-            log["Skill_Cosine_Loss"] = info["losses"]["skill_cos_loss"].item()
+        # if "skill_l2_loss" in info["losses"] and self.algo_config.loss.l2_weight:
+        #     log["Skill_L2_Loss"] = info["losses"]["skill_l2_loss"].item()
+        # if "skill_l1_loss" in info["losses"] and self.algo_config.loss.l1_weight:
+        #     log["Skill_L1_Loss"] = info["losses"]["skill_l1_loss"].item()
+        # if "skill_cos_loss" in info["losses"] and self.algo_config.loss.cos_weight:
+        #     log["Skill_Cosine_Loss"] = info["losses"]["skill_cos_loss"].item()
         if "policy_grad_norms" in info:
             log["Policy_Grad_Norms"] = info["policy_grad_norms"]
         return log
@@ -974,7 +974,7 @@ class BC_Transformer_SkillConditioned(BC):
         policy_grad_norms = TorchUtils.backprop_for_loss(
             net=self.nets["policy"],
             optim=self.optimizers["policy"],
-            loss=losses["action_loss"] + losses['skill_loss'],
+            loss=losses["action_loss"],
             max_grad_norm=self.global_config.train.max_grad_norm,
         )
         info["policy_grad_norms"] = policy_grad_norms

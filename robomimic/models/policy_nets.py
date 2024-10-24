@@ -1463,13 +1463,7 @@ class TransformerSkill2ActionNetwork(MIMO_Transformer):
         self.skill_dim = skill_dim
         self.skill_detach = skill_detach
         if not self.gtskill:
-            self.nets['skill_encoder'] = SkillEncoder(
-                                                d_model=512,
-                                                seq_len=256,
-                                                lang_dim=512,
-                                                vis_dim=384,
-                                                n_heads=8,
-                                        )
+            self.nets['skill_encoder'] = nn.Identity()
         # load weight for skill encoder
         # self.nets['skill_encoder'].load_state_dict(torch.load('/workspace/robomimic/expdata/skillencoder.pth'))
         
@@ -1477,7 +1471,7 @@ class TransformerSkill2ActionNetwork(MIMO_Transformer):
         self.skill_pos_embed = nn.Parameter(torch.randn(1, 1, 512))
         
         transformer_input_dim = self.nets["encoder"].output_shape()[0]
-        self.nets['skill_projection'] = nn.Linear(skill_dim, 512)
+        self.nets['skill_projection'] = nn.Linear(512, 512)
         # I think we can try discretization here
         
 
@@ -1562,7 +1556,8 @@ class TransformerSkill2ActionNetwork(MIMO_Transformer):
         if self.gtskill:
             current_skill = inputs['obs']['gtskill'][:, -1:, :]
         else:
-            current_skill = self.nets['skill_encoder'](inputs)
+            # language
+            current_skill = self.nets['skill_encoder'](inputs['lang_emb'][:, 0, :])
             current_skill = current_skill.reshape(B, 1, -1)
 
         if self.skill_detach:
