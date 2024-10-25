@@ -1499,7 +1499,7 @@ class TransformerSkill2ActionNetwork(MIMO_Transformer):
                 msg="TransformerSkillActorNetwork: input_shape inconsistent in temporal dimension")
         return [T, self.ac_dim]
 
-    def forward(self, obs_dict, actions=None, goal_dict=None, lang_emb=None, skill=None):
+    def forward(self, obs_dict, actions=None, goal_dict=None, lang_emb=None, skill=None, goal_image=None):
         """
         Forward a sequence of inputs through the Transformer.
         Args:
@@ -1518,7 +1518,7 @@ class TransformerSkill2ActionNetwork(MIMO_Transformer):
             mod = list(obs_dict.keys())[0]
             goal_dict = TensorUtils.unsqueeze_expand_at(goal_dict, size=obs_dict[mod].shape[1], dim=1)
 
-        forward_kwargs = dict(obs=obs_dict, goal=goal_dict, lang_emb=lang_emb, skill=skill)
+        forward_kwargs = dict(obs=obs_dict, goal=goal_dict, lang_emb=lang_emb, skill=skill, goal_image=goal_image)
         outputs = self._forward(**forward_kwargs)
 
         # apply tanh squashing to ensure actions are in [-1, 1]
@@ -2041,7 +2041,7 @@ class SkillEncoder(Module):
     """
     def __init__(
         self,
-        skill_dim=64,
+        skill_dim=384,
         d_model=512,
         seq_len=256,
         lang_dim=512,
@@ -2104,11 +2104,14 @@ class SkillEncoder(Module):
         """
         B, T, C, H, W = inputs['obs']['agentview_rgb'].shape
         
-        assert inputs['lang_emb'] is not None
+        # assert inputs['lang_emb'] is not None
         
-        lang_emb = inputs['lang_emb'][:, 0, :] # B, 512
+        # lang_emb = inputs['lang_emb'][:, 0, :] # B, 512
         
-        images = torch.tensor(np.stack(self.visual_processor(inputs['obs']['agentview_rgb'][:, -1, ...]*255).pixel_values)).to(lang_emb.device)
+        assert inputs['goal_image'] is not None
+        
+        goal_image = inputs['goal_image']
+        images = torch.tensor(np.stack(self.visual_processor(goal_image).pixel_values)).to(goal_image.device)
         cls_token = self.visual_encoder(images).last_hidden_state[:, 0, :] # B, 1, 384 
         skill = cls_token
         # features = self.visual_encoder(images).last_hidden_state[:, 1:, :] # B, 256, 384

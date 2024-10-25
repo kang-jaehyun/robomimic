@@ -999,8 +999,10 @@ class BC_Transformer_SkillConditioned(BC):
         input_batch = dict()
         h = self.context_length
         input_batch["obs"] = {k: batch["obs"][k][:, :h, :] for k in batch["obs"]}
-        input_batch["goal_obs"] = batch.get("goal_obs", None) # goals may not be present
+        input_batch['goal_obs'] = batch.get('goal_obs', None)
         input_batch['lang_emb'] = batch.get('lang_emb', None)
+        
+        input_batch["goal_image"] = batch['obs']['agentview_rgb'][:, -1, :]
         
         if self.supervise_all_steps:
             # supervision on entire sequence (instead of just current timestep)
@@ -1049,7 +1051,7 @@ class BC_Transformer_SkillConditioned(BC):
 
         predictions = OrderedDict()
         
-        predictions["actions"], predictions['skills'] = self.nets["policy"](obs_dict=batch["obs"], actions=None, goal_dict=batch["goal_obs"], lang_emb=batch['lang_emb'], skill=batch['skill'])
+        predictions["actions"], predictions['skills'] = self.nets["policy"](obs_dict=batch["obs"], actions=None, goal_dict=batch["goal_obs"], lang_emb=batch['lang_emb'], skill=batch['skill'], goal_image=batch['goal_image'])
         if not self.supervise_all_steps:
             # only supervise final timestep
             predictions["actions"] = predictions["actions"][:, -1, :]
