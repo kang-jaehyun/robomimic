@@ -1477,7 +1477,7 @@ class TransformerSkill2ActionNetwork(MIMO_Transformer):
         self.skill_pos_embed = nn.Parameter(torch.randn(1, 10, 512))
         
         transformer_input_dim = self.nets["encoder"].output_shape()[0]
-        self.nets['skill_projection'] = nn.Linear(skill_dim, 512)
+        self.nets['skill_projection'] = nn.Linear(384, 512)
         # I think we can try discretization here
         
 
