@@ -1473,8 +1473,8 @@ class TransformerSkill2ActionNetwork(MIMO_Transformer):
         # load weight for skill encoder
         # self.nets['skill_encoder'].load_state_dict(torch.load('/workspace/robomimic/expdata/skillencoder.pth'))
         
-        # learnable embeddding for skill (1,1,512)
-        self.skill_pos_embed = nn.Parameter(torch.randn(1, 1, 512))
+        # learnable embeddding for skill (1,10,512)
+        self.skill_pos_embed = nn.Parameter(torch.randn(1, 10, 512))
         
         transformer_input_dim = self.nets["encoder"].output_shape()[0]
         self.nets['skill_projection'] = nn.Linear(skill_dim, 512)
@@ -1571,7 +1571,7 @@ class TransformerSkill2ActionNetwork(MIMO_Transformer):
             skill = current_skill
             
         skill_emb = self.nets['skill_projection'](skill).repeat(1, T, 1) # TODO: actually not T, should be action chunking size
-        skill_emb = skill_emb + self.skill_pos_embed.repeat(B, T, 1)
+        skill_emb = skill_emb + self.skill_pos_embed
         
         if transformer_encoder_outputs is None:
             transformer_embeddings = self.input_embedding(transformer_inputs)
@@ -2109,16 +2109,18 @@ class SkillEncoder(Module):
         lang_emb = inputs['lang_emb'][:, 0, :] # B, 512
         
         images = torch.tensor(np.stack(self.visual_processor(inputs['obs']['agentview_rgb'][:, -1, ...]*255).pixel_values)).to(lang_emb.device)
-        features = self.visual_encoder(images).last_hidden_state[:, 1:, :] # B, 256, 384
-        features = self.vis_proj(features)
+        cls_token = self.visual_encoder(images).last_hidden_state[:, 0, :] # B, 1, 384 
+        skill = cls_token
+        # features = self.visual_encoder(images).last_hidden_state[:, 1:, :] # B, 256, 384
+        # features = self.vis_proj(features)
         
-        lang_emb = self.lang_proj(lang_emb).unsqueeze(1)
+        # lang_emb = self.lang_proj(lang_emb).unsqueeze(1)
         
-        transformer_inputs = torch.cat([self.cls_token.repeat(B, 1, 1), features, lang_emb], dim=1)
-        transformer_inputs = transformer_inputs + self.pos_embed
+        # transformer_inputs = torch.cat([self.cls_token.repeat(B, 1, 1), features, lang_emb], dim=1)
+        # transformer_inputs = transformer_inputs + self.pos_embed
         
-        out = self.transformer(transformer_inputs)
-        skill = self.skill_out(out[:, 0, :])
+        # out = self.transformer(transformer_inputs)
+        # skill = self.skill_out(out[:, 0, :])
         
         return skill
 
