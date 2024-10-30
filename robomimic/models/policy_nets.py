@@ -1471,8 +1471,12 @@ class TransformerSkill2ActionNetwork(MIMO_Transformer):
                                                 vis_dim=384,
                                                 n_heads=8,
                                         )
-        # load weight for skill encoder
-        # self.nets['skill_encoder'].load_state_dict(torch.load('/workspace/robomimic/expdata/skillencoder.pth'))
+            # load weight for skill encoder
+            self.nets['skill_encoder'].load_state_dict(torch.load('/workspace/libero_from_finetune_skillencoder/checkpoint-3000/skill_encoder.pth'))
+            
+            # freeze
+            for param in self.nets['skill_encoder'].parameters():
+                param.requires_grad = False
         
         # learnable embeddding for skill (1,T,512)
         self.skill_pos_embed = nn.Parameter(torch.randn(1, obs_window, 512))
