@@ -1,12 +1,12 @@
 import os
 import torch
-from transformers import AutoModel, pipeline, AutoTokenizer, CLIPTextModelWithProjection
+from transformers import AutoModel, pipeline, AutoTokenizer, CLIPTextModel, CLIPTextModelWithProjection
 
 class LangEncoder:
     def __init__(self, device):
         os.environ["TOKENIZERS_PARALLELISM"] = "true" # needed to suppress warning about potential deadlock
         # model_variant = "openai/clip-vit-large-patch14" #"openai/clip-vit-base-patch32"
-        model_variant = "openai/clip-vit-base-patch32"
+        model_variant = "openai/clip-vit-base-patch16"
         self.device = device
         # self.text_encoder = CLIPTextModelWithProjection.from_pretrained("openai/clip-vit-base-patch32")
         # self.tokenizer = AutoTokenizer.from_pretrained("openai/clip-vit-base-patch32")
@@ -29,12 +29,21 @@ class LangEncoder:
                 return_attention_mask=True,        # Generate the attention mask
                 return_tensors="pt",               # ask the function to return PyTorch tensors
             ).to(self.device)
+            
+            outputs = self.lang_emb_model(**tokens)
+            cls_emb = outputs.last_hidden_state[:, 0, :].detach()  # CLS token embedding
 
-            lang_emb = self.lang_emb_model(**tokens)['text_embeds'].detach()
-        
-        # check if input is batched or single string
+        # If input is a single string, return the first element
         if isinstance(lang, str):
-            lang_emb = lang_emb[0]
+            cls_emb = cls_emb[0]
 
-        return lang_emb
+        return cls_emb
+    
+        #     lang_emb = self.lang_emb_model(**tokens)['text_embeds'].detach()
+        
+        # # check if input is batched or single string
+        # if isinstance(lang, str):
+        #     lang_emb = lang_emb[0]
+
+        # return lang_emb
 

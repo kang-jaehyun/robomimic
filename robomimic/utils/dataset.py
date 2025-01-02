@@ -11,6 +11,7 @@ import math
 from copy import deepcopy
 from contextlib import contextmanager
 from collections import OrderedDict
+from PIL import Image
 
 import torch.utils.data
 import torch
@@ -23,6 +24,7 @@ import robomimic.utils.log_utils as LogUtils
 import robomimic.utils.lang_utils as LangUtils
 from robomimic.macros import LANG_EMB_KEY
 
+from transformers import AutoImageProcessor, CLIPImageProcessor
 
 class SequenceDataset(torch.utils.data.Dataset):
     def __init__(
@@ -122,10 +124,6 @@ class SequenceDataset(torch.utils.data.Dataset):
         if self.action_keys is not None:
             self.dataset_keys = tuple(set(self.dataset_keys).union(set(self.action_keys)))
 
-        self.skill = skill
-        if self.skill:
-            self.dataset_keys = tuple(set(self.dataset_keys).union(set(["skill"])))
-
         self.action_config = action_config
 
         # set up lang and language embedding
@@ -141,10 +139,14 @@ class SequenceDataset(torch.utils.data.Dataset):
         assert self.seq_length >= 1
 
         self.goal_mode = goal_mode
-        if self.goal_mode is not None:
-            assert self.goal_mode in ["last"]
-        if not self.load_next_obs:
-            assert self.goal_mode != "last"  # we use last next_obs as goal
+        if self.goal_mode == "skill":
+            self.depth_processor = AutoImageProcessor.from_pretrained("depth-anything/Depth-Anything-V2-Small-hf")
+            self.visual_processor = CLIPImageProcessor.from_pretrained("openai/clip-vit-base-patch16")
+        
+        # if self.goal_mode is not None:
+        #     assert self.goal_mode in ["last"]
+        # if not self.load_next_obs:
+        #     assert self.goal_mode != "last"  # we use last next_obs as goal
 
         self.pad_seq_length = pad_seq_length
         self.pad_frame_stack = pad_frame_stack
@@ -533,6 +535,12 @@ class SequenceDataset(torch.utils.data.Dataset):
         goal_index = None
         if self.goal_mode == "last":
             goal_index = end_index_in_demo - 1
+        elif self.goal_mode == "skill":
+            desired_skill_interval = 30
+            To = 2
+            # observation은 앞에 두개만 씀. n_frame_stack만큼 앞으로 갔다가 2를 더해야 현재 index
+            skill_interval = -self.n_frame_stack + To + desired_skill_interval
+            goal_index = min(index_in_demo + skill_interval, end_index_in_demo - 1)
 
         meta["obs"] = self.get_obs_sequence_from_demo(
             demo_id,
@@ -542,6 +550,7 @@ class SequenceDataset(torch.utils.data.Dataset):
             seq_length=self.seq_length,
             prefix="obs"
         )
+        
 
         if self.load_next_obs:
             meta["next_obs"] = self.get_obs_sequence_from_demo(
@@ -557,13 +566,35 @@ class SequenceDataset(torch.utils.data.Dataset):
             goal = self.get_obs_sequence_from_demo(
                 demo_id,
                 index_in_demo=goal_index,
-                keys=self.obs_keys,
+                keys=['agentview_rgb'],
                 num_frames_to_stack=0,
                 seq_length=1,
-                prefix="next_obs",
+                prefix="obs",
             )
-            meta["goal_obs"] = {k: goal[k][0] for k in goal}  # remove sequence dimension for goal
+            # meta["goal_obs"] = {k: goal[k][0] for k in goal}  # remove sequence dimension for goal
 
+            if self.goal_mode == "skill":
+                meta['goal_obs'] = {}
+                curr_img = meta["obs"]["agentview_rgb"][To-1]
+                goal_img = goal["agentview_rgb"][0]
+                
+                # flip image upside down
+                curr_img = np.flip(curr_img, axis=0)
+                goal_img = np.flip(goal_img, axis=0)
+                
+                curr_depth_feature = self.depth_processor(curr_img)["pixel_values"][0]
+                curr_feature = self.visual_processor(curr_img)["pixel_values"][0]
+                goal_depth_feature = self.depth_processor(goal_img)["pixel_values"][0]
+                goal_feature = self.visual_processor(goal_img)["pixel_values"][0]
+
+                # meta['goal_obs']['demo_id'] = demo_id
+                meta['goal_obs']['curr_img_for_skill'] = curr_img.copy()
+                meta["goal_obs"]['goal_img_for_skill'] = goal_img.copy()
+                meta["goal_obs"]["curr_depth_feature"] = curr_depth_feature
+                meta["goal_obs"]["curr_feature"] = curr_feature
+                meta["goal_obs"]["goal_depth_feature"] = goal_depth_feature
+                meta["goal_obs"]["goal_feature"] = goal_feature
+                
         # get action components
         ac_dict = OrderedDict()
         for k in self.action_keys:

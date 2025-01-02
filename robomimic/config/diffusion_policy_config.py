@@ -28,8 +28,10 @@ class DiffusionPolicyConfig(BaseConfig):
         self.algo.horizon.prediction_horizon = 16
         
         self.algo.skill.enabled = False
-        self.algo.skill.skill_dim = 64
-        self.algo.skill.gtskill = False
+        self.algo.skill.skill_dim = 768
+        
+        self.algo.lang.enabled = False
+        self.algo.lang.lang_dim = 512
         
         # UNet parameters
         self.algo.unet.enabled = True

@@ -21,12 +21,17 @@ import robomimic.utils.obs_utils as ObsUtils
 
 from robomimic.algo import register_algo_factory_func, PolicyAlgo
 
-from robomimic.models.policy_nets import SkillEncoder
-
 import random
 import robomimic.utils.torch_utils as TorchUtils
 import robomimic.utils.tensor_utils as TensorUtils
 import robomimic.utils.obs_utils as ObsUtils
+
+import os
+import sys
+sys.path.append(os.path.join(os.path.dirname(__file__), '../../action_diffusion'))
+from dynamics.idm import IDM
+from transformers import AutoTokenizer, PretrainedConfig, Dinov2Model, AutoImageProcessor, CLIPTextModel, AutoModelForDepthEstimation, CLIPImageProcessor, CLIPVisionModel
+
 
 @register_algo_factory_func("diffusion_policy")
 def algo_config_to_class(algo_config):
@@ -71,25 +76,39 @@ class DiffusionPolicyUNet(PolicyAlgo):
 
         if self.algo_config.skill.enabled:
             self.skill_dim = self.algo_config.skill.skill_dim
-            self.gtskill = self.algo_config.skill.gtskill
+            self.idm = IDM(
+                num_layers=8,
+                num_heads=4,
+                visual_channel=768,
+                depth_channel=1,
+                d_model=256,
+                out_dim=768,
+                num_visual_tokens=196, # for CLIP
+            )
+            state_dict = torch.load(f"/workspace/combined_pix2pix_ipp_depthca_all/checkpoint-23750/idm.pth", map_location='cpu')
+            self.idm.load_state_dict(state_dict)
+            # freeze IDM
+            for param in self.idm.parameters():
+                param.requires_grad = False
             
-            if not self.gtskill:
-                # create skill encoder
-                self.skill_encoder = SkillEncoder(
-                                                d_model=512,
-                                                seq_len=256,
-                                                lang_dim=512,
-                                                vis_dim=384,
-                                                n_heads=8,
-                                        ).to(self.device)
-                obs_dim += self.skill_dim
+            self.visual_encoder = CLIPVisionModel.from_pretrained("openai/clip-vit-base-patch16")
+            self.depth_estimator = AutoModelForDepthEstimation.from_pretrained("depth-anything/Depth-Anything-V2-Small-hf")
             
+            self.idm = self.idm.to(self.device)
+            self.visual_encoder = self.visual_encoder.to(self.device)
+            self.depth_estimator = self.depth_estimator.to(self.device)
             
             noise_pred_net = ConditionalUnet1D(
                 input_dim=self.ac_dim,
                 global_cond_dim=obs_dim*self.algo_config.horizon.observation_horizon + self.skill_dim
             )
-        
+        elif self.algo_config.lang.enabled:
+            # language condition
+            self.lang_dim = self.algo_config.lang.lang_dim
+            noise_pred_net = ConditionalUnet1D(
+                input_dim=self.ac_dim,
+                global_cond_dim=obs_dim*self.algo_config.horizon.observation_horizon + self.lang_dim
+            )
         else:
             # create network object
             noise_pred_net = ConditionalUnet1D(
@@ -160,14 +179,33 @@ class DiffusionPolicyUNet(PolicyAlgo):
         Tp = self.algo_config.horizon.prediction_horizon
 
         input_batch = dict()
-        input_batch
         input_batch["obs"] = {k: batch["obs"][k][:, :To, :] for k in batch["obs"]}
         input_batch["goal_obs"] = batch.get("goal_obs", None) # goals may not be present
         input_batch['lang_emb'] = batch.get('lang_emb', None)
         input_batch["actions"] = batch["actions"][:, :Tp, :]
         
         if self.algo_config.skill.enabled:
-            input_batch["skill"] = batch["skill"][:, :To, :]
+            curr_feature = input_batch['goal_obs']['curr_feature']
+            goal_feature = input_batch['goal_obs']['goal_feature']
+            curr_depth_feature = input_batch['goal_obs']['curr_depth_feature']
+            goal_depth_feature = input_batch['goal_obs']['goal_depth_feature']
+            
+            features = torch.cat([curr_feature, goal_feature]).to(self.device)
+            depth_features = torch.cat([curr_depth_feature, goal_depth_feature]).to(self.device)
+            
+            with torch.no_grad():
+                features = self.visual_encoder(features).last_hidden_state
+                depth_outputs = self.depth_estimator(depth_features).predicted_depth
+            
+            curr_features, next_features = torch.chunk(features[:, 1:], 2, dim=0)
+            curr_depth_features, next_depth_features = torch.chunk(depth_outputs, 2, dim=0)
+
+            visual_pair = torch.stack([curr_features, next_features], dim=1)
+            depth_pair = torch.stack([curr_depth_features, next_depth_features], dim=1)
+            depth_pair = F.interpolate(depth_pair, size=(256,256), mode="bilinear", align_corners=False)
+            skill = self.idm(depth_pair, visual_pair)
+            
+            input_batch["skill"] = skill
         
         # check if actions are normalized to [-1,1]
         if not self.action_check_done:
@@ -224,13 +262,13 @@ class DiffusionPolicyUNet(PolicyAlgo):
             obs_cond = obs_features.flatten(start_dim=1)
             
             if self.algo_config.skill.enabled:
-                if self.algo_config.skill.gtskill:
-                    skill = batch["skill"][:,-1, :] # B, 1, skill_dim
-                else:
-                    skill = self.skill_encoder(inputs)
+                skill = batch["skill"][:,0, :] # B, 1, skill_dim
                 obs_cond = torch.cat([obs_cond, skill], axis=-1)
                     
-            
+            if self.algo_config.lang.enabled:
+                lang = batch['lang_emb'][:,0, :] # B, 1, lang_dim, 2nd dim is T (Same across all T)
+                obs_cond = torch.cat([obs_cond, lang], axis=-1)
+                
             # sample noise to add to actions
             noise = torch.randn(actions.shape, device=self.device)
             
@@ -325,29 +363,29 @@ class DiffusionPolicyUNet(PolicyAlgo):
         # make sure we have at least To observations in obs_queue
         # if not enough, repeat
         # if already full, append one to the obs_queue
-        # n_repeats = max(To - len(self.obs_queue), 1)
-        # self.obs_queue.extend([obs_dict] * n_repeats)
+        n_repeats = max(To - len(self.obs_queue), 1)
+        self.obs_queue.extend([obs_dict] * n_repeats)
         
         if len(self.action_queue) == 0:
             # no actions left, run inference
             # turn obs_queue into dict of tensors (concat at T dim)
             # import pdb; pdb.set_trace()
-            # obs_dict_list = TensorUtils.list_of_flat_dict_to_dict_of_list(list(self.obs_queue))
-            # obs_dict_tensor = dict((k, torch.cat(v, dim=0).unsqueeze(0)) for k,v in obs_dict_list.items())
+            obs_dict_list = TensorUtils.list_of_flat_dict_to_dict_of_list(list(self.obs_queue))
+            obs_dict_tensor = dict((k, torch.stack(v, dim=1)) for k,v in obs_dict_list.items())
             
             # run inference
             # [1,T,Da]
-            action_sequence = self._get_action_trajectory(obs_dict=obs_dict, goal_dict=None, skill=None, lang_emb=None)
+            action_sequence = self._get_action_trajectory(obs_dict=obs_dict_tensor, goal_dict=goal_dict, skill=skill, lang_emb=lang_emb)
             
             # put actions into the queue
-            self.action_queue.extend(action_sequence[0])
+            self.action_queue.append(action_sequence[:, 0])
         
         # has action, execute from left to right
         # [Da]
         action = self.action_queue.popleft()
         
         # [1,Da]
-        action = action.unsqueeze(0)
+        # action = action.unsqueeze(0)
         return action
         
     def _get_action_trajectory(self, obs_dict, goal_dict=None, skill=None, lang_emb=None):
@@ -382,9 +420,13 @@ class DiffusionPolicyUNet(PolicyAlgo):
 
         # reshape observation to (B,obs_horizon*obs_dim)
         obs_cond = obs_features.flatten(start_dim=1)
-        if self.algo_config.skill.enabled and self.algo_config.skill.gtskill:
+        if self.algo_config.skill.enabled:
             skill = skill[:,-1, :]
             obs_cond = torch.cat([obs_cond, skill], axis=-1)
+        
+        if self.algo_config.lang.enabled:
+            lang_emb = lang_emb[:,-1, :]
+            obs_cond = torch.cat([obs_cond, lang_emb], axis=-1)
         
         # initialize action from Guassian noise
         noisy_action = torch.randn(
