@@ -141,7 +141,7 @@ class SequenceDataset(torch.utils.data.Dataset):
         self.goal_mode = goal_mode
         if self.goal_mode == "skill":
             self.depth_processor = AutoImageProcessor.from_pretrained("depth-anything/Depth-Anything-V2-Small-hf")
-            self.visual_processor = CLIPImageProcessor.from_pretrained("openai/clip-vit-base-patch16")
+            # self.visual_processor = CLIPImageProcessor.from_pretrained("openai/clip-vit-base-patch16")
         
         # if self.goal_mode is not None:
         #     assert self.goal_mode in ["last"]
@@ -583,17 +583,15 @@ class SequenceDataset(torch.utils.data.Dataset):
                 goal_img = np.flip(goal_img, axis=0)
                 
                 curr_depth_feature = self.depth_processor(curr_img)["pixel_values"][0]
-                curr_feature = self.visual_processor(curr_img)["pixel_values"][0]
+                # curr_feature = self.visual_processor(curr_img)["pixel_values"][0]
                 goal_depth_feature = self.depth_processor(goal_img)["pixel_values"][0]
-                goal_feature = self.visual_processor(goal_img)["pixel_values"][0]
+                # goal_feature = self.visual_processor(goal_img)["pixel_values"][0]
 
                 # meta['goal_obs']['demo_id'] = demo_id
-                meta['goal_obs']['curr_img_for_skill'] = curr_img.copy()
-                meta["goal_obs"]['goal_img_for_skill'] = goal_img.copy()
                 meta["goal_obs"]["curr_depth_feature"] = curr_depth_feature
-                meta["goal_obs"]["curr_feature"] = curr_feature
+                # meta["goal_obs"]["curr_feature"] = curr_feature
                 meta["goal_obs"]["goal_depth_feature"] = goal_depth_feature
-                meta["goal_obs"]["goal_feature"] = goal_feature
+                # meta["goal_obs"]["goal_feature"] = goal_feature
                 
         # get action components
         ac_dict = OrderedDict()

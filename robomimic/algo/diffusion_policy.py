@@ -29,7 +29,7 @@ import robomimic.utils.obs_utils as ObsUtils
 import os
 import sys
 sys.path.append(os.path.join(os.path.dirname(__file__), '../../action_diffusion'))
-from dynamics.idm import IDM
+from dynamics.idm_depth import IDMDepth
 from transformers import AutoTokenizer, PretrainedConfig, Dinov2Model, AutoImageProcessor, CLIPTextModel, AutoModelForDepthEstimation, CLIPImageProcessor, CLIPVisionModel
 
 
@@ -76,26 +76,25 @@ class DiffusionPolicyUNet(PolicyAlgo):
 
         if self.algo_config.skill.enabled:
             self.skill_dim = self.algo_config.skill.skill_dim
-            self.idm = IDM(
-                num_layers=8,
-                num_heads=4,
-                visual_channel=768,
-                depth_channel=1,
+            self.idm = IDMDepth(
+                num_layers=1,
+                num_heads=8,
+                seq_len=256,
+                channel=1, # depth channel
+                out_dim=64,
                 d_model=256,
-                out_dim=768,
-                num_visual_tokens=196, # for CLIP
             )
-            state_dict = torch.load(f"/workspace/combined_pix2pix_ipp_depthca_all/checkpoint-23750/idm.pth", map_location='cpu')
+            state_dict = torch.load(f"/workspace/combined_pix2pix_depthnorm_node43_8gpu/checkpoint-16000/idm_depth.pth", map_location='cpu')
             self.idm.load_state_dict(state_dict)
             # freeze IDM
             for param in self.idm.parameters():
                 param.requires_grad = False
             
-            self.visual_encoder = CLIPVisionModel.from_pretrained("openai/clip-vit-base-patch16")
+            # self.visual_encoder = CLIPVisionModel.from_pretrained("openai/clip-vit-base-patch16")
             self.depth_estimator = AutoModelForDepthEstimation.from_pretrained("depth-anything/Depth-Anything-V2-Small-hf")
             
             self.idm = self.idm.to(self.device)
-            self.visual_encoder = self.visual_encoder.to(self.device)
+            # self.visual_encoder = self.visual_encoder.to(self.device)
             self.depth_estimator = self.depth_estimator.to(self.device)
             
             noise_pred_net = ConditionalUnet1D(
@@ -185,25 +184,25 @@ class DiffusionPolicyUNet(PolicyAlgo):
         input_batch["actions"] = batch["actions"][:, :Tp, :]
         
         if self.algo_config.skill.enabled:
-            curr_feature = input_batch['goal_obs']['curr_feature']
-            goal_feature = input_batch['goal_obs']['goal_feature']
+            # curr_feature = input_batch['goal_obs']['curr_feature']
+            # goal_feature = input_batch['goal_obs']['goal_feature']
             curr_depth_feature = input_batch['goal_obs']['curr_depth_feature']
             goal_depth_feature = input_batch['goal_obs']['goal_depth_feature']
             
-            features = torch.cat([curr_feature, goal_feature]).to(self.device)
+            # features = torch.cat([curr_feature, goal_feature]).to(self.device)
             depth_features = torch.cat([curr_depth_feature, goal_depth_feature]).to(self.device)
             
             with torch.no_grad():
-                features = self.visual_encoder(features).last_hidden_state
+                # features = self.visual_encoder(features).last_hidden_state
                 depth_outputs = self.depth_estimator(depth_features).predicted_depth
             
-            curr_features, next_features = torch.chunk(features[:, 1:], 2, dim=0)
+            # curr_features, next_features = torch.chunk(features[:, 1:], 2, dim=0)
             curr_depth_features, next_depth_features = torch.chunk(depth_outputs, 2, dim=0)
 
-            visual_pair = torch.stack([curr_features, next_features], dim=1)
+            # visual_pair = torch.stack([curr_features, next_features], dim=1)
             depth_pair = torch.stack([curr_depth_features, next_depth_features], dim=1)
             depth_pair = F.interpolate(depth_pair, size=(256,256), mode="bilinear", align_corners=False)
-            skill = self.idm(depth_pair, visual_pair)
+            skill = self.idm(depth_pair)
             
             input_batch["skill"] = skill
         
