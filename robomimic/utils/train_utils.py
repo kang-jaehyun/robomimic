@@ -192,7 +192,10 @@ def dataset_factory(config, obs_keys, filter_by_attribute=None, dataset_path=Non
     ds_weights = [ds_cfg.get("weight", 1.0) for ds_cfg in config.train.data]
     ds_langs = [ds_cfg.get("lang", None) for ds_cfg in config.train.data]
     ds_kwargs['skill'] = config.algo.skill.enabled
-
+    ds_kwargs['skill_dir'] = config.train.skill_dir
+    ds_kwargs['skill_aug'] = config.train.skill_aug
+    ds_kwargs['aug_num'] = config.train.aug_num
+            
     meta_ds_kwargs = dict()
     
     dataset = get_dataset(

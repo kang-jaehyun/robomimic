@@ -49,6 +49,9 @@ class SequenceDataset(torch.utils.data.Dataset):
         lang_encoder=None,
         dataset_lang=None,
         skill=False,
+        skill_dir = None,
+        skill_aug = False,
+        aug_num = 0,
     ):
         """
         Dataset class for fetching sequences of experience.
@@ -110,6 +113,9 @@ class SequenceDataset(torch.utils.data.Dataset):
         self.hdf5_normalize_obs = hdf5_normalize_obs
         self._hdf5_file = None
 
+        self.skill_dir = skill_dir
+        self.skill_aug = skill_aug
+        self.aug_num = aug_num
         assert hdf5_cache_mode in ["all", "low_dim", None]
         self.hdf5_cache_mode = hdf5_cache_mode
 
@@ -139,9 +145,6 @@ class SequenceDataset(torch.utils.data.Dataset):
         assert self.seq_length >= 1
 
         self.goal_mode = goal_mode
-        if self.goal_mode == "skill":
-            self.depth_processor = AutoImageProcessor.from_pretrained("depth-anything/Depth-Anything-V2-Small-hf")
-            # self.visual_processor = CLIPImageProcessor.from_pretrained("openai/clip-vit-base-patch16")
         
         # if self.goal_mode is not None:
         #     assert self.goal_mode in ["last"]
@@ -536,11 +539,8 @@ class SequenceDataset(torch.utils.data.Dataset):
         if self.goal_mode == "last":
             goal_index = end_index_in_demo - 1
         elif self.goal_mode == "skill":
-            desired_skill_interval = 30
-            To = 2
-            # observation은 앞에 두개만 씀. n_frame_stack만큼 앞으로 갔다가 2를 더해야 현재 index
-            skill_interval = -self.n_frame_stack + To + desired_skill_interval
-            goal_index = min(index_in_demo + skill_interval, end_index_in_demo - 1)
+            skill_interval = 20
+            goal_index = index_in_demo
 
         meta["obs"] = self.get_obs_sequence_from_demo(
             demo_id,
@@ -562,36 +562,27 @@ class SequenceDataset(torch.utils.data.Dataset):
                 prefix="next_obs"
             )
 
-        if goal_index is not None:
-            goal = self.get_obs_sequence_from_demo(
-                demo_id,
-                index_in_demo=goal_index,
-                keys=['agentview_rgb'],
-                num_frames_to_stack=0,
-                seq_length=1,
-                prefix="obs",
-            )
-            # meta["goal_obs"] = {k: goal[k][0] for k in goal}  # remove sequence dimension for goal
-
-            if self.goal_mode == "skill":
-                meta['goal_obs'] = {}
-                curr_img = meta["obs"]["agentview_rgb"][To-1]
-                goal_img = goal["agentview_rgb"][0]
+        if self.goal_mode == "skill":
+            task_name = os.path.basename(os.path.splitext(self.hdf5_path)[0])
+            
+            if self.skill_aug:
+                aug_idx = random.randint(0, self.aug_num-1)
+                base_skill_path = os.path.join(self.skill_dir, task_name, demo_id, 'base.npy')
+                aug_skill_path = os.path.join(self.skill_dir, task_name, demo_id, 'aug_{}.npy'.format(aug_idx))
+                base_skill = np.load(base_skill_path)
+                aug_skill = np.load(aug_skill_path)
                 
-                # flip image upside down
-                curr_img = np.flip(curr_img, axis=0)
-                goal_img = np.flip(goal_img, axis=0)
-                
-                curr_depth_feature = self.depth_processor(curr_img)["pixel_values"][0]
-                # curr_feature = self.visual_processor(curr_img)["pixel_values"][0]
-                goal_depth_feature = self.depth_processor(goal_img)["pixel_values"][0]
-                # goal_feature = self.visual_processor(goal_img)["pixel_values"][0]
-
-                # meta['goal_obs']['demo_id'] = demo_id
-                meta["goal_obs"]["curr_depth_feature"] = curr_depth_feature
-                # meta["goal_obs"]["curr_feature"] = curr_feature
-                meta["goal_obs"]["goal_depth_feature"] = goal_depth_feature
-                # meta["goal_obs"]["goal_feature"] = goal_feature
+            meta['goal_obs'] = {}
+            # goal = self.get_obs_sequence_from_demo(
+            #     demo_id,
+            #     index_in_demo=goal_index,
+            #     keys=['skill'],
+            #     num_frames_to_stack=0,
+            #     seq_length=1,
+            #     prefix="obs",
+            # )
+            # # meta['goal_obs']['demo_id'] = demo_id
+            meta["goal_obs"]["skill"] = aug_skill[index_in_demo][None]
                 
         # get action components
         ac_dict = OrderedDict()

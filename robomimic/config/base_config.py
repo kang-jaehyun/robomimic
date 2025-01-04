@@ -223,8 +223,9 @@ class BaseConfig(Config):
 
         # one of [None, "last"] - set to "last" to include goal observations in each batch
         self.train.goal_mode = None
-
-
+        self.train.skill_dir = None
+        self.train.skill_aug = False
+        self.train.aug_num = 0
         ## learning config ##
         self.train.cuda = True          # use GPU or not
         self.train.batch_size = 100     # batch size
