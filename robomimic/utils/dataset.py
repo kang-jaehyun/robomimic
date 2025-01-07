@@ -565,14 +565,20 @@ class SequenceDataset(torch.utils.data.Dataset):
         if self.goal_mode == "skill":
             task_name = os.path.basename(os.path.splitext(self.hdf5_path)[0])
             
+
+            meta['goal_obs'] = {}
+            
             if self.skill_aug:
                 aug_idx = random.randint(0, self.aug_num-1)
-                base_skill_path = os.path.join(self.skill_dir, task_name, demo_id, 'base.npy')
                 aug_skill_path = os.path.join(self.skill_dir, task_name, demo_id, 'aug_{}.npy'.format(aug_idx))
-                base_skill = np.load(base_skill_path)
                 aug_skill = np.load(aug_skill_path)
+                meta["goal_obs"]["skill"] = aug_skill[index_in_demo]
+            else:
+                base_skill_path = os.path.join(self.skill_dir, task_name, demo_id, 'base.npy')
+                base_skill = np.load(base_skill_path)
+                meta["goal_obs"]["skill"] = base_skill[index_in_demo]
                 
-            meta['goal_obs'] = {}
+
             # goal = self.get_obs_sequence_from_demo(
             #     demo_id,
             #     index_in_demo=goal_index,
@@ -582,7 +588,7 @@ class SequenceDataset(torch.utils.data.Dataset):
             #     prefix="obs",
             # )
             # # meta['goal_obs']['demo_id'] = demo_id
-            meta["goal_obs"]["skill"] = aug_skill[index_in_demo][None]
+
                 
         # get action components
         ac_dict = OrderedDict()
