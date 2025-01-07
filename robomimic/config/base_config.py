@@ -127,8 +127,6 @@ class BaseConfig(Config):
         self.experiment.rollout.rate = 50                           # do rollouts every @rate epochs
         self.experiment.rollout.warmstart = 0                       # number of epochs to wait before starting rollouts
         self.experiment.rollout.terminate_on_success = True         # end rollout early after task success
-        self.experiment.rollout.batched = False                     # whether to parallelize evaluations over batched environments
-        self.experiment.rollout.num_batch_envs = 5                  # number of batched environments to use (applicable if experiment.rollout.batched is True)
 
         # for updating the evaluation env meta data
         self.experiment.env_meta_update_dict = Config()
@@ -202,6 +200,7 @@ class BaseConfig(Config):
         )
 
         self.train.action_keys = ["actions"]
+        self.train.action_shapes = [(1, 1)]
 
         # specifing each action keys to load and their corresponding normalization/conversion requirement
         # e.g. for dataset keys "action/eef_pos" and "action/eef_rot"
@@ -221,11 +220,15 @@ class BaseConfig(Config):
         self.train.action_config = {}
         # self.train.action_config.do_not_lock_keys()
 
-        # one of [None, "last"] - set to "last" to include goal observations in each batch
+        # one of [None, "last", "geom"] - set to "last" or "geom" to include goal observations in each batch
         self.train.goal_mode = None
         self.train.skill_dir = None
         self.train.skill_aug = False
         self.train.aug_num = 0
+        
+        # Used only if using geometric goal sampling
+        self.train.truncated_geom_factor = None
+
         ## learning config ##
         self.train.cuda = True          # use GPU or not
         self.train.batch_size = 100     # batch size
@@ -234,12 +237,22 @@ class BaseConfig(Config):
 
         self.train.max_grad_norm = None  # clip gradient norms (see `backprop_for_loss` function in torch_utils.py) 
 
-        self.train.data_format = "robomimic" # either "robomimic" or "r2d2"
+        self.train.data_format = "robomimic" # either "robomimic" or "droid"
 
         # list of observation keys to shuffle randomly in the dataset.
         # must be list of tuples pairs, with each pair representing
         # the corresponding observation key groups to shuffle
         self.train.shuffled_obs_key_groups = None
+
+        # RLDS only
+        self.train.data_path = ""
+        self.train.shuffle_buffer_size = 100000
+        self.train.sample_weights = [1, 1]
+        self.train.dataset_names = ["", ""]
+        self.train.subsample_length = 100
+        self.train.num_parallel_calls = 200
+        self.train.traj_transform_threads = 48
+        self.train.traj_read_threads = 48
 
     def algo_config(self):
         """
@@ -262,7 +275,7 @@ class BaseConfig(Config):
         configs may choose to, in order to have seperate configs for different networks 
         in the algorithm. 
         """
-
+        self.observation.image_dim = [] # For RLDS
         # observation modalities
         self.observation.modalities.obs.low_dim = [             # specify low-dim observations for agent
             "robot0_eef_pos", 
@@ -294,9 +307,13 @@ class BaseConfig(Config):
         self.observation.encoder.low_dim.obs_randomizer_kwargs.do_not_lock_keys()
 
         # =============== RGB default encoder (ResNet backbone + linear layer output) ===============
+        self.observation.encoder.rgb.fuser = None                               # How to combine the outputs of multi-camera vision encoders
         self.observation.encoder.rgb.core_class = "VisualCore"                  # Default VisualCore class combines backbone (like ResNet-18) with pooling operation (like spatial softmax)
         self.observation.encoder.rgb.core_kwargs = Config()                     # See models/obs_core.py for important kwargs to set and defaults used
         self.observation.encoder.rgb.core_kwargs.do_not_lock_keys()
+        # input keys for the encoder
+        self.observation.encoder.rgb.input_maps = Config() # mapping each obs key to encoder input map
+        self.observation.encoder.rgb.input_maps.do_not_lock_keys()
 
         # RGB: Obs Randomizer settings
         self.observation.encoder.rgb.obs_randomizer_class = None                # Can set to 'CropRandomizer' to use crop randomization

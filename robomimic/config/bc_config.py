@@ -28,7 +28,7 @@ class BCConfig(BaseConfig):
         self.algo.optim_params.policy.learning_rate.initial = 1e-4      # policy learning rate
         self.algo.optim_params.policy.learning_rate.decay_factor = 0.1  # factor to decay LR by (if epoch schedule non-empty)
         self.algo.optim_params.policy.learning_rate.epoch_schedule = [] # epochs where LR decay occurs
-        self.algo.optim_params.policy.learning_rate.scheduler_type = "constant_with_warmup" # learning rate scheduler ("multistep", "linear", etc) 
+        self.algo.optim_params.policy.learning_rate.scheduler_type = "multistep" # learning rate scheduler ("multistep", "linear", etc) 
         self.algo.optim_params.policy.regularization.L2 = 0.00          # L2 regularization strength
 
         # loss weights
@@ -53,9 +53,6 @@ class BCConfig(BaseConfig):
         self.algo.gmm.min_std = 0.0001                  # minimum std output from network
         self.algo.gmm.std_activation = "softplus"       # activation to use for std output from policy net
         self.algo.gmm.low_noise_eval = True             # low-std at test-time 
-
-        # Skill-conditioned policy settings
-        self.algo.skill.enabled = False
 
         # stochastic VAE policy settings
         self.algo.vae.enabled = False                   # whether to train a VAE policy
@@ -107,9 +104,3 @@ class BCConfig(BaseConfig):
         self.algo.transformer.activation = "gelu"                   # activation function for MLP in Transformer Block
         self.algo.transformer.supervise_all_steps = False           # if true, supervise all intermediate actions, otherwise only final one
         self.algo.transformer.nn_parameter_for_timesteps = True     # if true, use nn.Parameter otherwise use nn.Embedding
-        self.algo.transformer.pred_future_acs = False               # shift action prediction forward to predict future actions instead of past actions
-        self.algo.transformer.causal = True                         # whether the transformer is causal
-        self.algo.transformer.skill2action = False
-        self.algo.transformer.gtskill = False 
-        
-        self.algo.language_conditioned = False                      # whether policy is language conditioned

@@ -53,6 +53,11 @@
             "actions"
         ],
         "goal_mode": null,
+        "truncated_geom_factor": null,
+        "subsample_length": 100,
+        "num_parallel_calls": 200,
+        "traj_transform_threads": 48,
+        "traj_read_threads": 48,
         "cuda": true,
         "batch_size": 256,
         "num_epochs": 2000,
@@ -88,7 +93,7 @@
             "power": 0.75
         },
         "ddpm": {
-            "enabled": false,
+            "enabled": true,
             "num_train_timesteps": 100,
             "num_inference_timesteps": 100,
             "beta_schedule": "squaredcos_cap_v2",
@@ -96,7 +101,7 @@
             "prediction_type": "epsilon"
         },
         "ddim": {
-            "enabled": true,
+            "enabled": false,
             "num_train_timesteps": 100,
             "num_inference_timesteps": 10,
             "beta_schedule": "squaredcos_cap_v2",

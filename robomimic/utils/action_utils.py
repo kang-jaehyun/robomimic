@@ -33,3 +33,19 @@ def vector_to_action_dict(
             action.shape[:-1]+this_act_shape)
         start_idx = end_idx
     return action_dict
+
+def get_action_stats_dict(rlds_dataset_stats, action_keys, action_shapes):
+    action_stats = dict()
+    start_idx = 0
+    for key, shape in zip(action_keys, action_shapes):
+        this_act_shape = shape
+        this_act_dim = np.prod(this_act_shape)
+        end_idx = start_idx + this_act_dim
+        action_stats[key] = dict()
+        for sub_key in rlds_dataset_stats.keys():
+            action = np.array(rlds_dataset_stats[sub_key])
+            action_stats[key][sub_key] = action[...,start_idx:end_idx].reshape(
+                action.shape[:-1]+tuple(this_act_shape))
+        start_idx = end_idx
+
+    return action_stats

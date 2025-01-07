@@ -1,5 +1,4 @@
-from robomimic.scripts.config_gen.config_gen_utils import *
-
+from robomimic.scripts.config_gen.helper import *
 
 def make_generator_helper(args):
     algo_name_short = "bc_xfmr"
@@ -9,44 +8,128 @@ def make_generator_helper(args):
         config_file=os.path.join(base_path, 'robomimic/exps/templates/bc_transformer.json'),
         args=args,
         algo_name_short=algo_name_short,
+        pt=True,
     )
+    if args.ckpt_mode is None:
+        args.ckpt_mode = "off"
 
-    ### Define dataset variants to train on ###
     generator.add_param(
-        key="train.data",
-        name="ds",
-        group=123456,
-        values_and_names=[
-            (get_robocasa_ds("single_stage", src="human", eval=["PnPCounterToSink", "PnPCounterToCab"], filter_key="50_demos"), "human-50"), # training on human datasets
-            (get_robocasa_ds("single_stage", src="mg", eval=["PnPCounterToSink", "PnPCounterToCab"], filter_key="3000_demos"), "mg-3000"), # training on MimicGen datasets
-
-            # composite tasks
-            (get_robocasa_ds("ArrangeVegetables", filter_key="50_demos"), "ArrangeVegetables"),
-            (get_robocasa_ds("MicrowaveThawing", filter_key="50_demos"), "MicrowaveThawing"),
-            (get_robocasa_ds("RestockPantry", filter_key="50_demos"), "RestockPantry"),
-            (get_robocasa_ds("PreSoakPan", filter_key="50_demos"), "PreSoakPan"),
-            (get_robocasa_ds("PrepareCoffee", filter_key="50_demos"), "PrepareCoffee"),
-        ]
+        key="train.num_data_workers",
+        name="",
+        group=-1,
+        values=[4],
     )
-
-    """
-    ### Uncomment this code to fine-tune on existing checkpoint ###
     generator.add_param(
-        key="experiment.ckpt_path",
-        name="ckpt",
-        group=1389,
-        values_and_names=[
-            (None, "none"),
-            # ("set checkpoint pth path here", "trained-ckpt"),
+        key="experiment.save.every_n_epochs",
+        name="",
+        group=-1,
+        values=[
+            100
         ],
     )
-    """
 
+    # run rollouts at epoch 0 only
+    generator.add_param(
+        key="experiment.rollout.warmstart",
+        name="",
+        group=-1,
+        values=[
+            -1,
+        ],
+    )
+    generator.add_param(
+        key="train.num_epochs",
+        name="",
+        group=-1,
+        values=[40],
+    )
+    generator.add_param(
+        key="experiment.rollout.rate",
+        name="",
+        group=-1,
+        values=[10],
+    )
+
+    if args.env == "droid":
+        generator.add_param(
+            key="train.data",
+            name="ds",
+            group=2,
+            values=[
+                [{"path": p} for p in scan_datasets("~/code/droid/data/success/2023-05-23_t2c-cans", postfix="trajectory_im84.h5")],
+                [{"path": p} for p in scan_datasets("~/code/droid/data/success/2023-05-23_t2c-cans", postfix="trajectory_im128.h5")],
+            ],
+            value_names=[
+                "pnp-t2c-cans-84",
+                "pnp-t2c-cans-128",
+            ],
+        )
+        generator.add_param(
+            key="observation.encoder.rgb.obs_randomizer_kwargs.crop_height",
+            name="",
+            group=2,
+            values=[
+                76,
+                116
+            ],
+        )
+        generator.add_param(
+            key="observation.encoder.rgb.obs_randomizer_kwargs.crop_width",
+            name="",
+            group=2,
+            values=[
+                76,
+                116
+            ],
+        )
+    else:
+        raise ValueError
+
+    if "experiment.ckpt_path" in generator.parameters:
+        generator.add_param(
+            key="algo.optim_params.policy.learning_rate.initial",
+            name="lrinit",
+            group=110,
+            values=[
+                1e-5,
+            ],
+            hidename=True,
+        )
+        generator.add_param(
+            key="algo.optim_params.policy.learning_rate.lr_scheduler_type",
+            name="lrsch",
+            group=111,
+            values=[
+                # "linear",
+                None,
+            ],
+            value_names=[
+                "none"
+            ],
+            hidename=True,
+        )
+    
     generator.add_param(
         key="train.output_dir",
         name="",
         group=-1,
-        values=[get_output_dir(args, algo_dir=algo_name_short)]
+        values=[
+            "~/expdata/{env}/{mod}/{algo_name_short}".format(
+                env=args.env,
+                mod=args.mod,
+                algo_name_short=algo_name_short,
+            )
+        ],
+    )
+
+    generator.add_param(
+        key="experiment.rollout.enabled",
+        name="",
+        group=-1,
+        values=[
+            True
+        ],
+        hidename=False,
     )
 
     return generator

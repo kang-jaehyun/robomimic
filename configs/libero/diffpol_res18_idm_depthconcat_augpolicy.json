@@ -1,47 +1,39 @@
 {
-    "algo_name": "bc",
+    "algo_name": "diffusion_policy",
     "experiment": {
-        "name": "seed_123_human50_resnet18-skillconditioned-eval",
+        "name": "diffpol_res18_idm_depthconcat_augpolicy",
         "validate": false,
         "logging": {
             "terminal_output_to_txt": true,
             "log_tb": true,
-            "log_wandb": false,
-            "wandb_proj_name": "bc_xfmr_09-23-bc-baseline_human50_resnet18-skillconditioned-eval"
+            "log_wandb": true,
+            "wandb_proj_name": "skilldiff_libero90"
         },
-        "mse": {
-            "enabled": false,
-            "every_n_epochs": 50,
-            "on_save_ckpt": true,
-            "num_samples": 20,
-            "visualize": true
-        },
+        "mse": {},
         "save": {
             "enabled": true,
             "every_n_seconds": null,
-            "every_n_epochs": 100,
+            "every_n_epochs": 50,
             "epochs": [],
             "on_best_validation": false,
             "on_best_rollout_return": false,
             "on_best_rollout_success_rate": false
         },
-        "epoch_every_n_steps": 500,
+        "epoch_every_n_steps": 100,
         "validation_epoch_every_n_steps": 10,
         "env": null,
         "additional_envs": null,
         "render": false,
-        "render_video": true,
-        "keep_all_videos": true,
+        "render_video": false,
+        "keep_all_videos": false,
         "video_skip": 5,
         "rollout": {
-            "enabled": true,
-            "n": 50,
+            "enabled": false,
+            "n": 20,
             "horizon": 500,
             "rate": 100,
             "warmstart": 0,
-            "terminate_on_success": true,
-            "batched": false,
-            "num_batch_envs": 5
+            "terminate_on_success": true
         },
         "env_meta_update_dict": {
             "env_kwargs": {
@@ -72,44 +64,46 @@
                     ]
                 ],
                 "randomize_cameras": false,
-                "obj_instance_split": "B"
+                "obj_instance_split": "B",
+                "controller_configs": {
+                    "control_delta": false
+                }
             }
-        },
-        "ckpt_path": "/workspace/robomimic/expdata/robocasa/bc_xfmr/09-23-bc-baseline-human50-resnet18-skillconditioned/seed_123_human50_resnet18-skillconditioned/20240923193917/models/model_epoch_300.pth"
+        }
     },
     "train": {
         "data": [
             {
-                "path": "datasets/v0.1/single_stage/kitchen_drawer/OpenDrawer/2024-05-03/demo_gentex_im128_randcams_la.hdf5",
+                "path": "datasets/LIBERO_ALL/libero_90/KITCHEN_SCENE10_close_the_top_drawer_of_the_cabinet_and_put_the_black_bowl_on_top_of_it_demo.hdf5",
                 "horizon": 500,
-                "do_eval": true,
-                "filter_key": "50_demos"
+                "do_eval": false
             }
         ],
-        "output_dir": "expdata/robocasa/bc_xfmr/09-23-bc-baseline-human50-resnet18-skillconditioned-eval",
-        "num_data_workers": 5,
+        "output_dir": "../expdata/skilldiff_libero90/diffpol_res18_idm_depthconcat_augpolicy",
+        "skill_dir" : "/workspace/datasets/LIBERO_ALL/libero_90_skill/combined_skill_transfer_bottleneck_depthclip_concat/aug",
+        "skill_aug" : true,
+        "aug_num" : 2,
+        "num_data_workers": 16,
         "hdf5_cache_mode": null,
         "hdf5_use_swmr": true,
         "hdf5_load_next_obs": false,
         "hdf5_normalize_obs": false,
         "hdf5_filter_key": null,
-        "hdf5_validation_filter_key": null,
-        "seq_length": 10,
+        "seq_length": 15,
         "pad_seq_length": true,
-        "frame_stack": 10,
+        "frame_stack": 2,
         "pad_frame_stack": true,
         "dataset_keys": [
             "actions"
         ],
-        "action_keys": [
-            "actions"
-        ],
+        "goal_mode": "skill",
+        "cuda": true,
+        "batch_size": 256,
+        "num_epochs": 2000,
+        "seed": 0,
         "action_config": {
             "actions": {
                 "normalization": null
-            },
-            "actions_abs": {
-                "normalization": "min_max"
             },
             "action_dict/abs_pos": {
                 "normalization": "min_max"
@@ -140,134 +134,78 @@
                 "normalization": null
             }
         },
-        "goal_mode": null,
-        "cuda": true,
-        "batch_size": 16,
-        "num_epochs": 1000,
-        "seed": 123,
-        "max_grad_norm": 100.0,
-        "data_format": "robomimic",
-        "shuffled_obs_key_groups": null
+        "action_keys": [
+            "actions"
+        ]
     },
     "algo": {
         "optim_params": {
             "policy": {
-                "optimizer_type": "adamw",
                 "learning_rate": {
                     "initial": 0.0001,
-                    "decay_factor": 1.0,
-                    "epoch_schedule": [
-                        100
-                    ],
-                    "scheduler_type": "constant_with_warmup"
+                    "decay_factor": 0.1,
+                    "epoch_schedule": []
                 },
                 "regularization": {
-                    "L2": 0.01
+                    "L2": 0.0
                 }
             }
         },
-        "loss": {
-            "l2_weight": 1.0,
-            "l1_weight": 0.0,
-            "cos_weight": 0.0
-        },
-        "actor_layer_dims": [],
-        "gaussian": {
-            "enabled": false,
-            "fixed_std": false,
-            "init_std": 0.1,
-            "min_std": 0.01,
-            "std_activation": "softplus",
-            "low_noise_eval": true
-        },
-        "gmm": {
-            "enabled": false,
-            "num_modes": 5,
-            "min_std": 0.005,
-            "std_activation": "softplus",
-            "low_noise_eval": true
+        "horizon": {
+            "observation_horizon": 2,
+            "action_horizon": 8,
+            "prediction_horizon": 16
         },
         "skill": {
-            "enabled": true
-        },
-        "vae": {
-            "enabled": false,
-            "latent_dim": 14,
-            "latent_clip": null,
-            "kl_weight": 1.0,
-            "decoder": {
-                "is_conditioned": true,
-                "reconstruction_sum_across_elements": false
-            },
-            "prior": {
-                "learn": false,
-                "is_conditioned": false,
-                "use_gmm": false,
-                "gmm_num_modes": 10,
-                "gmm_learn_weights": false,
-                "use_categorical": false,
-                "categorical_dim": 10,
-                "categorical_gumbel_softmax_hard": false,
-                "categorical_init_temp": 1.0,
-                "categorical_temp_anneal_step": 0.001,
-                "categorical_min_temp": 0.3
-            },
-            "encoder_layer_dims": [
-                300,
-                400
-            ],
-            "decoder_layer_dims": [
-                300,
-                400
-            ],
-            "prior_layer_dims": [
-                300,
-                400
-            ]
-        },
-        "rnn": {
-            "enabled": false,
-            "horizon": 10,
-            "hidden_dim": 400,
-            "rnn_type": "LSTM",
-            "num_layers": 2,
-            "open_loop": false,
-            "kwargs": {
-                "bidirectional": false
-            }
-        },
-        "transformer": {
             "enabled": true,
-            "context_length": 10,
-            "embed_dim": 512,
-            "num_layers": 6,
-            "num_heads": 8,
-            "emb_dropout": 0.1,
-            "attn_dropout": 0.1,
-            "block_output_dropout": 0.1,
-            "sinusoidal_embedding": false,
-            "activation": "gelu",
-            "supervise_all_steps": true,
-            "nn_parameter_for_timesteps": true,
-            "pred_future_acs": false,
-            "causal": false
+            "skill_dim": 64
         },
-        "language_conditioned": false
+        "unet": {
+            "enabled": true,
+            "diffusion_step_embed_dim": 256,
+            "down_dims": [
+                256,
+                512,
+                1024
+            ],
+            "kernel_size": 5,
+            "n_groups": 8
+        },
+        "ema": {
+            "enabled": true,
+            "power": 0.75
+        },
+        "ddpm": {
+            "enabled": false,
+            "num_train_timesteps": 100,
+            "num_inference_timesteps": 100,
+            "beta_schedule": "squaredcos_cap_v2",
+            "clip_sample": true,
+            "prediction_type": "epsilon"
+        },
+        "ddim": {
+            "enabled": true,
+            "num_train_timesteps": 100,
+            "num_inference_timesteps": 10,
+            "beta_schedule": "squaredcos_cap_v2",
+            "clip_sample": true,
+            "set_alpha_to_one": true,
+            "steps_offset": 0,
+            "prediction_type": "epsilon"
+        }
     },
     "observation": {
         "modalities": {
             "obs": {
                 "low_dim": [
-                    "robot0_base_to_eef_pos",
-                    "robot0_base_to_eef_quat",
-                    "robot0_base_pos",
-                    "robot0_base_quat",
-                    "robot0_gripper_qpos"
+                    "ee_ori",
+                    "ee_pos",
+                    "gripper_states",
+                    "joint_states"
                 ],
                 "rgb": [
-                    "robot0_agentview_left_image",
-                    "robot0_agentview_right_image",
-                    "robot0_eye_in_hand_image"
+                    "eye_in_hand_rgb",
+                    "agentview_rgb"
                 ],
                 "depth": [],
                 "scan": []
@@ -305,8 +243,8 @@
                 },
                 "obs_randomizer_class": "CropRandomizer",
                 "obs_randomizer_kwargs": {
-                    "crop_height": 116,
-                    "crop_width": 116,
+                    "crop_height": 76,
+                    "crop_width": 76,
                     "num_crops": 1,
                     "pos_enc": false
                 }
@@ -326,15 +264,17 @@
         }
     },
     "meta": {
-        "hp_base_config_file": "robomimic/exps/templates/bc_transformer.json",
+        "hp_base_config_file": "robomimic/exps/templates/diffusion_policy.json",
         "hp_keys": [
             "seed",
             "ds",
+            "ac_keys",
             "obsrandargs"
         ],
         "hp_values": [
-            123,
+            0,
             "human-50",
+            "abs_acs",
             {
                 "crop_height": 116,
                 "crop_width": 116,

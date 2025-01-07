@@ -7,7 +7,6 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.distributions as D
-from torchvision import models as vision_models
 
 import robomimic.models.base_nets as BaseNets
 import robomimic.models.obs_nets as ObsNets
@@ -17,7 +16,6 @@ import robomimic.utils.loss_utils as LossUtils
 import robomimic.utils.tensor_utils as TensorUtils
 import robomimic.utils.torch_utils as TorchUtils
 import robomimic.utils.obs_utils as ObsUtils
-from robomimic.macros import LANG_EMB_KEY
 
 from robomimic.algo import register_algo_factory_func, PolicyAlgo
 
@@ -40,7 +38,6 @@ def algo_config_to_class(algo_config):
     gaussian_enabled = ("gaussian" in algo_config and algo_config.gaussian.enabled)
     gmm_enabled = ("gmm" in algo_config and algo_config.gmm.enabled)
     vae_enabled = ("vae" in algo_config and algo_config.vae.enabled)
-    skill_enabled = ("skill" in algo_config and algo_config.skill.enabled)
 
     rnn_enabled = algo_config.rnn.enabled
     transformer_enabled = algo_config.transformer.enabled
@@ -70,11 +67,7 @@ def algo_config_to_class(algo_config):
         if rnn_enabled:
             algo_class, algo_kwargs = BC_RNN, {}
         elif transformer_enabled:
-            if skill_enabled:
-                algo_class, algo_kwargs = BC_Transformer_SkillConditioned, {}
-            else:
-                algo_class, algo_kwargs = BC_Transformer, {}
-            
+            algo_class, algo_kwargs = BC_Transformer, {}
         else:
             algo_class, algo_kwargs = BC, {}
 
@@ -214,14 +207,8 @@ class BC(PolicyAlgo):
             net=self.nets["policy"],
             optim=self.optimizers["policy"],
             loss=losses["action_loss"],
-            max_grad_norm=self.global_config.train.max_grad_norm,
         )
         info["policy_grad_norms"] = policy_grad_norms
-
-        # step through optimizers
-        for k in self.lr_schedulers:
-            if self.lr_schedulers[k] is not None:
-                self.lr_schedulers[k].step()
         return info
 
     def log_info(self, info):
@@ -713,9 +700,6 @@ class BC_Transformer(BC):
         """
         self.context_length = self.algo_config.transformer.context_length
         self.supervise_all_steps = self.algo_config.transformer.supervise_all_steps
-        self.pred_future_acs = self.algo_config.transformer.pred_future_acs
-        if self.pred_future_acs:
-            assert self.supervise_all_steps is True
 
     def process_batch_for_training(self, batch):
         """
@@ -735,18 +719,10 @@ class BC_Transformer(BC):
 
         if self.supervise_all_steps:
             # supervision on entire sequence (instead of just current timestep)
-            if self.pred_future_acs:
-                ac_start = h - 1
-            else:
-                ac_start = 0
-            input_batch["actions"] = batch["actions"][:, ac_start:ac_start+h, :]
-
+            input_batch["actions"] = batch["actions"][:, :h, :]
         else:
             # just use current timestep
             input_batch["actions"] = batch["actions"][:, h-1, :]
-
-        if self.pred_future_acs:
-            assert input_batch["actions"].shape[1] == h
 
         input_batch = TensorUtils.to_device(TensorUtils.to_float(input_batch), self.device)
         return input_batch
@@ -789,325 +765,8 @@ class BC_Transformer(BC):
         """
         assert not self.nets.training
 
-        output = self.nets["policy"](obs_dict, actions=None, goal_dict=goal_dict)
+        return self.nets["policy"](obs_dict, actions=None, goal_dict=goal_dict)[:, -1, :]
 
-        if self.supervise_all_steps:
-            if self.algo_config.transformer.pred_future_acs:
-                output = output[:, 0, :]
-            else:
-                output = output[:, -1, :]
-        else:
-            output = output[:, -1, :]
-
-        return output
-
-class BC_Transformer_SkillConditioned(BC):
-    """
-    BC training with a Transformer policy.
-    """
-    def _create_networks(self):
-        """
-        Creates networks and places them into @self.nets.
-        """
-        assert self.algo_config.transformer.enabled
-
-        self.nets = nn.ModuleDict()
-        
-        if self.algo_config.transformer.skill2action:
-            # assume that we are predicting future actions
-            assert self.algo_config.transformer.pred_future_acs and self.algo_config.transformer.supervise_all_steps
-            
-            self.nets["policy"] = PolicyNets.TransformerSkill2ActionNetwork(
-                obs_shapes=self.obs_shapes,
-                goal_shapes=self.goal_shapes,
-                ac_dim=self.ac_dim,
-                encoder_kwargs=ObsUtils.obs_encoder_kwargs_from_config(self.obs_config.encoder),
-                **BaseNets.transformer_args_from_config(self.algo_config.transformer),
-            )
-        else: 
-            self.nets["policy"] = PolicyNets.TransformerSkillActorNetwork(
-                obs_shapes=self.obs_shapes,
-                goal_shapes=self.goal_shapes,
-                ac_dim=self.ac_dim,
-                encoder_kwargs=ObsUtils.obs_encoder_kwargs_from_config(self.obs_config.encoder),
-                **BaseNets.transformer_args_from_config(self.algo_config.transformer),
-            )
-        self._set_params_from_config()
-
-        self.nets = self.nets.float().to(self.device)
-
-    def train_on_batch(self, batch, epoch, validate=False):
-        """
-        Training on a single batch of data.
-
-        Args:
-            batch (dict): dictionary with torch.Tensors sampled
-                from a data loader and filtered by @process_batch_for_training
-
-            epoch (int): epoch number - required by some Algos that need
-                to perform staged training and early stopping
-
-            validate (bool): if True, don't perform any learning updates.
-
-        Returns:
-            info (dict): dictionary of relevant inputs, outputs, and losses
-                that might be relevant for logging
-        """
-        with TorchUtils.maybe_no_grad(no_grad=validate):
-            info = super(BC, self).train_on_batch(batch, epoch, validate=validate)
-            predictions = self._forward_training(batch)
-            losses = self._compute_losses(predictions, batch)
-
-            info["predictions"] = TensorUtils.detach(predictions)
-            info["losses"] = TensorUtils.detach(losses)
-
-            if not validate:
-                step_info = self._train_step(losses)
-                info.update(step_info)
-
-        return info
-
-    def _set_params_from_config(self):
-        """
-        Read specific config variables we need for training / eval.
-        Called by @_create_networks method
-        """
-        self.context_length = self.algo_config.transformer.context_length
-        self.supervise_all_steps = self.algo_config.transformer.supervise_all_steps
-        self.pred_future_acs = self.algo_config.transformer.pred_future_acs
-        if self.pred_future_acs:
-            assert self.supervise_all_steps is True
-
-    def _compute_losses(self, predictions, batch):
-        """
-        Internal helper function for BC algo class. Compute losses based on
-        network outputs in @predictions dict, using reference labels in @batch.
-
-        Args:
-            predictions (dict): dictionary containing network outputs, from @_forward_training
-            batch (dict): dictionary with torch.Tensors sampled
-                from a data loader and filtered by @process_batch_for_training
-
-        Returns:
-            losses (dict): dictionary of losses computed over the batch
-        """
-        losses = OrderedDict()
-        a_target = batch["actions"]
-        l_target = batch['skill'][:, -1:, :] # only the last skill
-
-        actions = predictions["actions"]
-        skills = predictions['skills']
-        
-        h = self.context_length
-        if not self.supervise_all_steps and not self.pred_future_acs:
-            skills = skills[:, -1, :]
-
-        losses["action_l2_loss"] = nn.MSELoss()(actions, a_target)
-        losses["action_l1_loss"] = nn.SmoothL1Loss()(actions, a_target)
-        # cosine direction loss on eef delta position
-        losses["action_cos_loss"] = LossUtils.cosine_loss(actions[..., :3], a_target[..., :3])
-
-        losses["skill_l2_loss"] = nn.MSELoss()(skills, l_target)
-        losses["skill_l1_loss"] = nn.SmoothL1Loss()(skills, l_target)
-        # cosine direction loss on eef delta position
-        losses["skill_cos_loss"] = LossUtils.cosine_loss(skills[..., :3], l_target[..., :3])
-
-
-        action_losses = [
-            self.algo_config.loss.l2_weight * losses["action_l2_loss"],
-            self.algo_config.loss.l1_weight * losses["action_l1_loss"],
-            self.algo_config.loss.cos_weight * losses["action_cos_loss"],
-        ]
-        skill_losses = [
-            self.algo_config.loss.l2_weight * losses["skill_l2_loss"],
-            self.algo_config.loss.l1_weight * losses["skill_l1_loss"],
-            self.algo_config.loss.cos_weight * losses["skill_cos_loss"],
-        ]
-        action_loss = sum(action_losses)
-        skill_loss = sum(skill_losses)
-
-        losses['skill_loss'] = skill_loss
-        losses["action_loss"] = action_loss
-        return losses
-
-    def log_info(self, info):
-        """
-        Process info dictionary from @train_on_batch to summarize
-        information to pass to tensorboard for logging.
-
-        Args:
-            info (dict): dictionary of info
-
-        Returns:
-            loss_log (dict): name -> summary statistic
-        """
-        log = super(BC, self).log_info(info)
-        log["Loss"] = info["losses"]["action_loss"].item()
-        log["Skill_Loss"] = info["losses"]["skill_loss"].item()
-        if "action_l2_loss" in info["losses"] and self.algo_config.loss.l2_weight:
-            log["L2_Loss"] = info["losses"]["action_l2_loss"].item()
-        if "action_l1_loss" in info["losses"] and self.algo_config.loss.l1_weight:
-            log["L1_Loss"] = info["losses"]["action_l1_loss"].item()
-        if "action_cos_loss" in info["losses"] and self.algo_config.loss.cos_weight:
-            log["Cosine_Loss"] = info["losses"]["action_cos_loss"].item()
-        if "skill_l2_loss" in info["losses"] and self.algo_config.loss.l2_weight:
-            log["Skill_L2_Loss"] = info["losses"]["skill_l2_loss"].item()
-        if "skill_l1_loss" in info["losses"] and self.algo_config.loss.l1_weight:
-            log["Skill_L1_Loss"] = info["losses"]["skill_l1_loss"].item()
-        if "skill_cos_loss" in info["losses"] and self.algo_config.loss.cos_weight:
-            log["Skill_Cosine_Loss"] = info["losses"]["skill_cos_loss"].item()
-        if "policy_grad_norms" in info:
-            log["Policy_Grad_Norms"] = info["policy_grad_norms"]
-        return log
-    
-    def _train_step(self, losses):
-        """
-        Internal helper function for BC algo class. Perform backpropagation on the
-        loss tensors in @losses to update networks.
-
-        Args:
-            losses (dict): dictionary of losses computed over the batch, from @_compute_losses
-        """
-
-        # gradient step
-        info = OrderedDict()
-        policy_grad_norms = TorchUtils.backprop_for_loss(
-            net=self.nets["policy"],
-            optim=self.optimizers["policy"],
-            loss=losses["action_loss"] + losses['skill_loss'],
-            max_grad_norm=self.global_config.train.max_grad_norm,
-        )
-        info["policy_grad_norms"] = policy_grad_norms
-
-        # step through optimizers
-        for k in self.lr_schedulers:
-            if self.lr_schedulers[k] is not None:
-                self.lr_schedulers[k].step()
-        return info
-
-    def process_batch_for_training(self, batch):
-        """
-        Processes input batch from a data loader to filter out
-        relevant information and prepare the batch for training.
-        Args:
-            batch (dict): dictionary with torch.Tensors sampled
-                from a data loader
-        Returns:
-            input_batch (dict): processed and filtered batch that
-                will be used for training
-        """
-        input_batch = dict()
-        h = self.context_length
-        input_batch["obs"] = {k: batch["obs"][k][:, :h, :] for k in batch["obs"]}
-        input_batch["goal_obs"] = batch.get("goal_obs", None) # goals may not be present
-        input_batch['lang_emb'] = batch.get('lang_emb', None)
-        
-        if self.supervise_all_steps:
-            # supervision on entire sequence (instead of just current timestep)
-            if self.pred_future_acs:
-                ac_start = h - 1
-            else:
-                ac_start = 0
-                raise NotImplementedError
-            input_batch["actions"] = batch["actions"][:, ac_start:ac_start+h, :]
-            input_batch["skill"] = batch["skill"][:, :h, :]
-
-        else:
-            # just use current timestep
-            raise NotImplementedError
-            input_batch["actions"] = batch["actions"][:, h-1, :]
-            input_batch["skill"] = batch["skill"][:, h-1, :]
-                
-        if self.pred_future_acs:
-            assert input_batch["actions"].shape[1] == h
-        
-        # if self.algo_config.transformer.gtskill:
-            # input_batch['gtskill'] = input_batch['skill']
-            
-        input_batch = TensorUtils.to_device(TensorUtils.to_float(input_batch), self.device)
-        return input_batch
-
-    def _forward_training(self, batch, epoch=None):
-        """
-        Internal helper function for BC_Transformer algo class. Compute forward pass
-        and return network outputs in @predictions dict.
-
-        Args:
-            batch (dict): dictionary with torch.Tensors sampled
-                from a data loader and filtered by @process_batch_for_training
-
-        Returns:
-            predictions (dict): dictionary containing network outputs
-        """
-        # ensure that transformer context length is consistent with temporal dimension of observations
-        TensorUtils.assert_size_at_dim(
-            batch["obs"], 
-            size=(self.context_length), 
-            dim=1, 
-            msg="Error: expect temporal dimension of obs batch to match transformer context length {}".format(self.context_length),
-        )
-
-        predictions = OrderedDict()
-        
-        predictions["actions"], predictions['skills'] = self.nets["policy"](obs_dict=batch["obs"], actions=None, goal_dict=batch["goal_obs"], lang_emb=batch['lang_emb'], skill=batch['skill'])
-        if not self.supervise_all_steps:
-            # only supervise final timestep
-            predictions["actions"] = predictions["actions"][:, -1, :]
-        return predictions
-    
-    def postprocess_batch_for_training(self, batch, obs_normalization_stats):
-        """
-        Does some operations (like channel swap, uint8 to float conversion, normalization)
-        after @process_batch_for_training is called, in order to ensure these operations
-        take place on GPU.
-
-        Args:
-            batch (dict): dictionary with torch.Tensors sampled
-                from a data loader. Assumed to be on the device where
-                training will occur (after @process_batch_for_training
-                is called)
-
-            obs_normalization_stats (dict or None): if provided, this should map observation 
-                keys to dicts with a "mean" and "std" of shape (1, ...) where ... is the 
-                default shape for the observation.
-
-        Returns:
-            batch (dict): postproceesed batch
-        """
-        obs_keys = ["obs", "next_obs", "goal_obs"]
-        for k in obs_keys:
-            if k in batch and batch[k] is not None:
-                batch[k] = ObsUtils.process_obs_dict(batch[k])
-                if obs_normalization_stats is not None:
-                    batch[k] = ObsUtils.normalize_dict(batch[k], obs_normalization_stats=obs_normalization_stats)
-
-        return batch
-    
-    def get_action(self, obs_dict, goal_dict=None, lang_emb=None, skill=None):
-        """
-        Get policy action outputs.
-        Args:
-            obs_dict (dict): current observation
-            goal_dict (dict): (optional) goal
-        Returns:
-            action (torch.Tensor): action tensor
-        """
-        assert not self.nets.training
-
-        action, skill = self.nets["policy"](obs_dict, actions=None, goal_dict=goal_dict, lang_emb=lang_emb, skill=skill)
-
-        if self.supervise_all_steps:
-            if self.algo_config.transformer.pred_future_acs:
-                action = action[:, 0, :]
-                # skill = skill[:, 0, :]
-            else:
-                action = action[:, -1, :]
-                # skill = skill[:, -1, :]
-        else:
-            action = action[:, -1, :]
-            # skill = skill[:, -1, :]
-
-        return action
 
 class BC_Transformer_GMM(BC_Transformer):
     """

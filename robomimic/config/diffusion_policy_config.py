@@ -19,20 +19,18 @@ class DiffusionPolicyConfig(BaseConfig):
         self.algo.optim_params.policy.learning_rate.initial = 1e-4      # policy learning rate
         self.algo.optim_params.policy.learning_rate.decay_factor = 0.1  # factor to decay LR by (if epoch schedule non-empty)
         self.algo.optim_params.policy.learning_rate.epoch_schedule = [] # epochs where LR decay occurs
-        self.algo.optim_params.policy.learning_rate.scheduler_type = "constant"
         self.algo.optim_params.policy.regularization.L2 = 0.00          # L2 regularization strength
 
         # horizon parameters
         self.algo.horizon.observation_horizon = 2
         self.algo.horizon.action_horizon = 8
         self.algo.horizon.prediction_horizon = 16
-        
         self.algo.skill.enabled = False
         self.algo.skill.skill_dim = 768
         
         self.algo.lang.enabled = False
         self.algo.lang.lang_dim = 512
-        
+                
         # UNet parameters
         self.algo.unet.enabled = True
         self.algo.unet.diffusion_step_embed_dim = 256
@@ -43,7 +41,7 @@ class DiffusionPolicyConfig(BaseConfig):
         # EMA parameters
         self.algo.ema.enabled = True
         self.algo.ema.power = 0.75
-
+        
         self.algo.language_conditioned = False
         
         # Noise Scheduler
@@ -54,10 +52,11 @@ class DiffusionPolicyConfig(BaseConfig):
         self.algo.ddpm.beta_schedule = 'squaredcos_cap_v2'
         self.algo.ddpm.clip_sample = True
         self.algo.ddpm.prediction_type = 'epsilon'
+        self.algo.noise_samples = 1
 
         ## DDIM
         self.algo.ddim.enabled = False
-        self.algo.ddim.num_train_timesteps = 100
+        self.algo.ddim.num_train_timesteps = 50 #100
         self.algo.ddim.num_inference_timesteps = 10
         self.algo.ddim.beta_schedule = 'squaredcos_cap_v2'
         self.algo.ddim.clip_sample = True

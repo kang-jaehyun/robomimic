@@ -1,5 +1,5 @@
 """
-Add image information to existing r2d2 hdf5 file
+Add image information to existing droid hdf5 file
 """
 import h5py
 import os
@@ -9,28 +9,55 @@ from tqdm import tqdm
 import argparse
 import shutil
 import torch
+import random
+import traceback
+import json
+import cv2
+
+"""
+Follow instructions here to setup zed:
+https://www.stereolabs.com/docs/installation/linux/
+"""
+import pyzed.sl as sl
 
 import robomimic.utils.torch_utils as TorchUtils
+import robomimic.utils.tensor_utils as TensorUtils
 
-from r2d2.camera_utils.wrappers.recorded_multi_camera_wrapper import RecordedMultiCameraWrapper
-from r2d2.trajectory_utils.trajectory_reader import TrajectoryReader
-from r2d2.camera_utils.info import camera_type_to_string_dict
+from droid.camera_utils.wrappers.recorded_multi_camera_wrapper import RecordedMultiCameraWrapper
+from droid.trajectory_utils.trajectory_reader import TrajectoryReader
+from droid.camera_utils.info import camera_type_to_string_dict
+
+from droid.camera_utils.camera_readers.zed_camera import ZedCamera, standard_params
+
+
+def get_cam_instrinsics(svo_path):
+    """
+    utility function to get camera intrinsics
+    """
+    intrinsics = {}
+
+    return intrinsics
 
 def convert_dataset(path, args):
-    recording_folderpath = os.path.join(os.path.dirname(path), "recordings", "MP4")
+    output_path = os.path.join(os.path.dirname(path), "trajectory_im{}.h5".format(args.imsize))
+    recording_folderpath = os.path.join(os.path.dirname(path), "recordings", "SVO")
+
+    if os.path.exists(output_path):
+        # dataset already exists, skip
+        f = h5py.File(output_path)
+        if "observation/camera/image/hand_camera_left_image" in f.keys():
+            # print("Skipping finished")
+            return
+        f.close()
+
+    
+    num_svo_files = len([f for f in os.listdir(recording_folderpath) if os.path.isfile(os.path.join(recording_folderpath, f))])
+    assert(num_svo_files == 3), "Didnt find 3 svos!"
     camera_kwargs = dict(
         hand_camera=dict(image=True, concatenate_images=False, resolution=(args.imsize, args.imsize), resize_func="cv2"),
         varied_camera=dict(image=True, concatenate_images=False, resolution=(args.imsize, args.imsize), resize_func="cv2"),
     )
     camera_reader = RecordedMultiCameraWrapper(recording_folderpath, camera_kwargs)
-
-    output_path = os.path.join(os.path.dirname(path), "trajectory_im{}.h5".format(args.imsize))
-    # if os.path.exists(output_path):
-    #     # dataset already exists, skip
-    #     f = h5py.File(output_path)
-    #     if "observation/camera/image/hand_camera_image" in f.keys():
-    #         return
-    #     f.close()
 
     shutil.copyfile(path, output_path)
     f = h5py.File(output_path, "a")
@@ -70,6 +97,7 @@ def convert_dataset(path, args):
             varied_cam_ids.append(k)
         else:
             raise ValueError
+        
 
     # sort the camera ids: important to maintain consistency of cams between train and eval!
     hand_cam_ids = sorted(hand_cam_ids)
@@ -104,6 +132,7 @@ def convert_dataset(path, args):
             else:
                 im_key = IMAGE_NAME_TO_CAM_KEY_MAPPING[cam_name]
                 im = camera_obs["image"][im_key]
+                im = cv2.cvtColor(im, cv2.COLOR_BGRA2BGR)
 
             # perform bgr_to_rgb operation
             im = im[:,:,::-1]
@@ -120,28 +149,60 @@ def convert_dataset(path, args):
     if "extrinsics" not in f["observation/camera"]:
         f["observation/camera"].create_group("extrinsics")
     extrinsics_grp = f["observation/camera/extrinsics"]    
-    for raw_key in f["observation/camera_extrinsics"].keys():
-        cam_key = "_".join(raw_key.split("_")[:2])
-        # reverse search for image name
-        im_name = None
-        for (k, v) in IMAGE_NAME_TO_CAM_KEY_MAPPING.items():
-            if v == cam_key:
-                im_name = k
-                break
-        if im_name is None: # sometimes the raw_key doesn't correspond to any camera we have images for
-            continue
-        extr_name = "_".join(im_name.split("_")[:-2] + raw_key.split("_")[1:])
-        data = f["observation/camera_extrinsics"][raw_key]
-        extrinsics_grp.create_dataset(extr_name, data=data, compression="gzip")
-
-    eef_pos = f["observation/robot_state"]["cartesian_position"][:,0:3].astype(np.float64)
-    eef_euler = f["observation/robot_state"]["cartesian_position"][:,3:6].astype(np.float64)
-    eef_euler = torch.from_numpy(eef_euler)
-    eef_quat = TorchUtils.euler_angles_to_quat(eef_euler)
-    eef_quat = eef_quat.numpy().astype(np.float64)
+    for (im_name, cam_key) in IMAGE_NAME_TO_CAM_KEY_MAPPING.items():
+        raw_data = f["observation/camera_extrinsics"][cam_key][:]
+        raw_data = torch.from_numpy(raw_data)
+        pos = raw_data[:,0:3]
+        rot_mat = TorchUtils.euler_angles_to_matrix(raw_data[:,3:6], convention="XYZ")
+        extrinsics = np.zeros((len(pos), 4, 4))
+        extrinsics[:,:3,:3] = TensorUtils.to_numpy(rot_mat)
+        extrinsics[:,:3,3] = TensorUtils.to_numpy(pos)
+        extrinsics[:,3,3] = 1.0
+        # invert the matrix to represent standard definition of extrinsics: from world to cam
+        extrinsics = np.linalg.inv(extrinsics)
+        extr_name = "_".join(im_name.split("_")[:-1])
+        extrinsics_grp.create_dataset(extr_name, data=extrinsics)
     
-    f["observation/robot_state"].create_dataset("eef_pos", data=eef_pos)
-    f["observation/robot_state"].create_dataset("eef_quat", data=eef_quat)
+    svo_path = os.path.join(os.path.dirname(path), "recordings", "SVO")
+    cam_reader_svo = camera_reader #RecordedMultiCameraWrapper(svo_path, camera_kwargs)
+    if "intrinsics" not in f["observation/camera"]:
+        f["observation/camera"].create_group("intrinsics")
+    intrinsics_grp = f["observation/camera/intrinsics"]    
+    for cam_id, svo_reader in cam_reader_svo.camera_dict.items():
+        cam = svo_reader._cam
+        calib_params = cam.get_camera_information().camera_configuration.calibration_parameters
+        for (posftix, params)in zip(
+            ["_left", "_right"],
+            [calib_params.left_cam, calib_params.right_cam]
+        ):
+            # get name to store intrinsics under
+            cam_key = cam_id + posftix
+            # reverse search for image name
+            im_name = None
+            for (k, v) in IMAGE_NAME_TO_CAM_KEY_MAPPING.items():
+                if v == cam_key:
+                    im_name = k
+                    break
+            if im_name is None: # sometimes the raw_key doesn't correspond to any camera we have images for
+                continue
+            intr_name = "_".join(im_name.split("_")[:-1])
+
+            # if intr_name not in intrinsics_grp:
+            #     intrinsics_grp.create_group(intr_name)
+            # cam_intr_grp = intrinsics_grp[intr_name]
+            
+            # these lines are copied from _process_intrinsics function in svo_reader.py
+            cam_intrinsics = np.array([[params.fx, 0, params.cx], [0, params.fy, params.cy], [0, 0, 1]])
+            data = np.repeat(cam_intrinsics[None], demo_len, axis=0)
+            intrinsics_grp.create_dataset(intr_name, data=data)
+            # {
+            #     "camera_matrix": np.array([[params.fx, 0, params.cx], [0, params.fy, params.cy], [0, 0, 1]]),
+            #     "dist_coeffs": np.array(list(params.disto)),
+            # }
+            # # batchify across trajectory
+            # for k in cam_intrinsics:
+            #     data = np.repeat(cam_intrinsics[k][None], demo_len, axis=0)
+            #     cam_intr_grp.create_dataset(k, data=data)
 
     # extract action key data
     action_dict_group = f["action"]
@@ -187,6 +248,8 @@ def convert_dataset(path, args):
         remove_timesteps(f, timesteps_to_remove)
 
     f.close()
+    camera_reader.disable_cameras()
+    del camera_reader
 
 def remove_timesteps(f, timesteps_to_remove):
     total_timesteps = f["action/cartesian_position"].shape[0]
@@ -216,7 +279,7 @@ if __name__ == "__main__":
         "--folder",
         type=str,
         help="folder containing hdf5's to add camera images to",
-        default="~/datasets/r2d2/success"
+        default="~/datasets/droid/success"
     )
 
     parser.add_argument(
@@ -235,16 +298,22 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     datasets = []
-    for root, dirs, files in os.walk(os.path.expanduser(args.folder)):
+    j = os.walk(os.path.expanduser(args.folder))
+    import pdb; pdb.set_trace()
+    for root, dirs, files in j:
         for f in files:
             if f == "trajectory.h5":
+                # if "success" in root:
                 datasets.append(os.path.join(root, f))
+                print(len(datasets))
 
     print("converting datasets...")
+    random.shuffle(datasets)
+    failed = 0
     for d in tqdm(datasets):
         d = os.path.expanduser(d)
         try:
             convert_dataset(d, args)
         except Exception as e:
-            print("Exception for dataset path:", d)
-            print(e)
+            failed += 1
+            print(f"{failed} Failed")

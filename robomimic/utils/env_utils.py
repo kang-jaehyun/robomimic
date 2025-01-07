@@ -143,7 +143,6 @@ def create_env(
     render=False, 
     render_offscreen=False, 
     use_image_obs=False, 
-    env_lang=None,
     **kwargs,
 ):
     """
@@ -163,8 +162,6 @@ def create_env(
         use_image_obs (bool): if True, environment is expected to render rgb image observations
             on every env.step call. Set this to False for efficiency reasons, if image
             observations are not required.
-
-        env_lang: TODO documentation
     """
 
     # note: pass @postprocess_visual_obs True, to make sure images are processed for network inputs
@@ -175,7 +172,6 @@ def create_env(
         render_offscreen=render_offscreen, 
         use_image_obs=use_image_obs,
         postprocess_visual_obs=True,
-        env_lang=env_lang,
         **kwargs,
     )
     print("Created environment with name {}".format(env_name))
@@ -188,8 +184,7 @@ def create_env_from_metadata(
     env_name=None,  
     render=False, 
     render_offscreen=False, 
-    use_image_obs=False,
-    seed=None,
+    use_image_obs=False, 
 ):
     """
     Create environment.
@@ -220,17 +215,12 @@ def create_env_from_metadata(
     env_type = get_env_type(env_meta=env_meta)
     env_kwargs = env_meta["env_kwargs"]
     env_kwargs["env_name"] = env_name
-    env_lang = env_meta.get("env_lang", None)
-
-    if seed is not None:
-        env_kwargs["seed"] = seed
 
     env = create_env(
         env_type=env_type,
         render=render, 
         render_offscreen=render_offscreen, 
-        use_image_obs=use_image_obs,
-        env_lang=env_lang,
+        use_image_obs=use_image_obs, 
         **env_kwargs,
     )
     check_env_version(env, env_meta)
@@ -243,7 +233,6 @@ def create_env_for_data_processing(
     camera_height, 
     camera_width, 
     reward_shaping,
-    seed=None,
 ):
     """
     Creates environment for processing dataset observations and rewards.
@@ -277,9 +266,6 @@ def create_env_for_data_processing(
     env_kwargs.pop("camera_height", None)
     env_kwargs.pop("camera_width", None)
     env_kwargs.pop("reward_shaping", None)
-
-    if seed is not None:
-        env_kwargs["seed"] = seed
 
     env = env_class.create_for_data_processing(
         env_name=env_name, 

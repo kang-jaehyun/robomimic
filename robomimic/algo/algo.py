@@ -10,6 +10,7 @@ These factory functions are registered into a global dictionary with the
 import textwrap
 from copy import deepcopy
 from collections import OrderedDict
+import random
 
 import torch.nn as nn
 import torch
@@ -22,8 +23,6 @@ import robomimic.utils.torch_utils as TorchUtils
 import robomimic.utils.obs_utils as ObsUtils
 import robomimic.utils.action_utils as AcUtils
 import robomimic.utils.vis_utils as VisUtils
-import robomimic.utils.lang_utils as LangUtils
-from robomimic.macros import LANG_EMB_KEY
 
 from torch.utils.data import DataLoader
 
@@ -162,9 +161,6 @@ class Algo(object):
             if "subgoal" in self.obs_config.modalities and k in [obs_key for modality in self.obs_config.modalities.subgoal.values() for obs_key in modality]:
                 self.subgoal_shapes[k] = obs_key_shapes[k]
 
-        if self.algo_config.language_conditioned:
-            self.obs_shapes[LANG_EMB_KEY] = [768] # clip is 768-dim embedding
-
     def _create_networks(self):
         """
         Creates networks and places them into @self.nets.
@@ -179,40 +175,24 @@ class Algo(object):
         self.optimizers = dict()
         self.lr_schedulers = dict()
 
-        num_training_steps = self.global_config.train.num_epochs * self.global_config.experiment.epoch_every_n_steps
-
         for k in self.optim_params:
             # only make optimizers for networks that have been created - @optim_params may have more
             # settings for unused networks
             if k in self.nets:
                 if isinstance(self.nets[k], nn.ModuleList):
                     self.optimizers[k] = [
-                        TorchUtils.optimizer_from_optim_params(
-                            net_optim_params=self.optim_params[k],
-                            net=self.nets[k][i]
-                        )
+                        TorchUtils.optimizer_from_optim_params(net_optim_params=self.optim_params[k], net=self.nets[k][i])
                         for i in range(len(self.nets[k]))
                     ]
                     self.lr_schedulers[k] = [
-                        TorchUtils.lr_scheduler_from_optim_params(
-                            net_optim_params=self.optim_params[k],
-                            net=self.nets[k][i],
-                            optimizer=self.optimizers[k][i],
-                            num_training_steps=num_training_steps,
-                        )
+                        TorchUtils.lr_scheduler_from_optim_params(net_optim_params=self.optim_params[k], net=self.nets[k][i], optimizer=self.optimizers[k][i])
                         for i in range(len(self.nets[k]))
                     ]
                 else:
                     self.optimizers[k] = TorchUtils.optimizer_from_optim_params(
-                        net_optim_params=self.optim_params[k],
-                        net=self.nets[k]
-                    )
+                        net_optim_params=self.optim_params[k], net=self.nets[k])
                     self.lr_schedulers[k] = TorchUtils.lr_scheduler_from_optim_params(
-                        net_optim_params=self.optim_params[k],
-                        net=self.nets[k],
-                        optimizer=self.optimizers[k],
-                        num_training_steps=num_training_steps,
-                    )
+                        net_optim_params=self.optim_params[k], net=self.nets[k], optimizer=self.optimizers[k])
 
     def process_batch_for_training(self, batch):
         """
@@ -248,8 +228,7 @@ class Algo(object):
         Returns:
             batch (dict): postproceesed batch
         """
-        # obs_keys = ["obs", "next_obs", "goal_obs"]
-        obs_keys = ["obs", "next_obs"]
+        obs_keys = ["obs", "next_obs", "goal_obs"]
         for k in obs_keys:
             if k in batch and batch[k] is not None:
                 batch[k] = ObsUtils.process_obs_dict(batch[k])
@@ -301,13 +280,11 @@ class Algo(object):
         """
         Called at the end of each epoch.
         """
-        """
-        step through optimizers with every step of gradient descent instead
-        """
-        # # LR scheduling updates
-        # for k in self.lr_schedulers:
-        #     if self.lr_schedulers[k] is not None:
-        #         self.lr_schedulers[k].step()
+
+        # LR scheduling updates
+        for k in self.lr_schedulers:
+            if self.lr_schedulers[k] is not None:
+                self.lr_schedulers[k].step()
 
     def set_eval(self):
         """
@@ -370,7 +347,7 @@ class PolicyAlgo(Algo):
 
     def compute_traj_pred_actual_actions(self, traj, return_images=False):
         """
-        traj is an R2D2Dataset object representing one trajectory
+        traj is an DROIDDataset object representing one trajectory
         This function is slow (>1s per trajectory) because there is no batching 
         and instead loops through all timesteps one by one
         TODO: documentation
@@ -407,7 +384,7 @@ class PolicyAlgo(Algo):
             batch = self.postprocess_batch_for_training(batch, obs_normalization_stats=None) # ignore obs_normalization for now
 
             model_output = self.get_action(batch["obs"])
-            
+
             actual_action = TensorUtils.to_numpy(
                 batch["actions"][0][0]
             )
@@ -421,6 +398,33 @@ class PolicyAlgo(Algo):
         actual_actions = np.array(actual_actions)
         predicted_actions = np.array(predicted_actions)
         return actual_actions, predicted_actions, images
+
+    def compute_batch_visualize(self, batch, num_samples, savedir=None):
+        visualize = savedir is not None
+
+        varied_cam_1_images = batch["obs"]['camera/image/varied_camera_1_left_image'][:num_samples][:, 0, :, :, :]
+        varied_cam_2_images = batch["obs"]['camera/image/varied_camera_2_left_image'][:num_samples][:, 0, :, :, :]
+        images = {
+            "varied_camera_1_image": varied_cam_1_images,
+            "varied_camera_2_image": varied_cam_2_images
+        }
+
+        if visualize:
+            print("Saving batch visualization plots to {}".format(savedir))
+
+        vis_log = {}
+        if visualize:
+            save_path = os.path.join(savedir, "batch_images.png")
+            VisUtils.make_batch_vis_plot(
+                save_path=save_path,
+                images=images,
+            )
+            try:
+                vis_log[traj_key] = imageio.imread(save_path)
+            except:
+                pass
+
+        return vis_log
     
     def compute_mse_visualize(self, trainset, validset, num_samples, savedir=None):
         """If savedir is not None, then also visualize the model predictions and save them to savedir"""
@@ -428,14 +432,18 @@ class PolicyAlgo(Algo):
 
         # set model into eval mode
         self.set_eval()
-        random_state = np.random.RandomState(0)
-        train_indices = random_state.choice(
-            len(trainset.datasets),
-            min(len(trainset.datasets), num_samples)
-        ).astype(int)
-        training_sampled_data = [trainset.datasets[idx] for idx in train_indices]
+        eval_data = [d for d in trainset.datasets if "eval" in d.hdf5_path]
+        broad_data = [d for d in trainset.datasets if "eval" not in d.hdf5_path]
+        if len(eval_data) < int(num_samples / 2):
+            training_sampled_data = random.sample(broad_data, int(num_samples))
+        elif len(broad_data) < int(num_samples / 2):
+            training_sampled_data = random.sample(eval_data, int(num_samples))
+        else:
+            training_sampled_data = random.sample(eval_data, int(num_samples / 2)) + random.sample(broad_data, int(num_samples / 2))
+
         
         if validset is not None:
+            random_state = np.random.RandomState(0)
             valid_indices = random_state.choice(
                 len(validset.datasets),
                 min(len(validset.datasets), num_samples)
@@ -485,7 +493,10 @@ class PolicyAlgo(Algo):
                         actual_actions=actual_actions,
                         predicted_actions=predicted_actions,
                     )
-                    vis_log[traj_key] = imageio.imread(save_path)
+                    try:
+                        vis_log[traj_key] = imageio.imread(save_path)
+                    except:
+                        pass
                 traj_num += 1
             
             actual_actions_all_traj = np.concatenate(actual_actions_all_traj, axis=0)
@@ -615,7 +626,7 @@ class RolloutPolicy(object):
     """
     Wraps @Algo object to make it easy to run policies in a rollout loop.
     """
-    def __init__(self, policy, obs_normalization_stats=None, action_normalization_stats=None, lang_encoder=None):
+    def __init__(self, policy, obs_normalization_stats=None, action_normalization_stats=None):
         """
         Args:
             policy (Algo instance): @Algo object to wrap to prepare for rollouts
@@ -628,39 +639,26 @@ class RolloutPolicy(object):
         self.policy = policy
         self.obs_normalization_stats = obs_normalization_stats
         self.action_normalization_stats = action_normalization_stats
-        self._ep_lang_emb = None
-        self.lang_encoder = lang_encoder
 
-    def start_episode(self, lang=None):
+    def start_episode(self):
         """
         Prepare the policy to start a new rollout.
         """
-        if self.lang_encoder is not None:
-            self._ep_lang_emb = TensorUtils.to_numpy(self.lang_encoder.get_lang_emb(lang))
         self.policy.set_eval()
         self.policy.reset()
 
-    def _prepare_observation(self, ob, batched=False):
+    def _prepare_observation(self, ob):
         """
         Prepare raw observation dict from environment for policy.
 
         Args:
             ob (dict): single observation dictionary from environment (no batch dimension, 
                 and np.array values for each key)
-
-            batched (bool): whether the input is already batched
         """
         if self.obs_normalization_stats is not None:
             ob = ObsUtils.normalize_dict(ob, obs_normalization_stats=self.obs_normalization_stats)
-        # assert batched is False
-        if self._ep_lang_emb is not None:
-            if len(ob["robot0_eef_pos"].shape) == 1:
-                ob["lang_emb"] = self._ep_lang_emb
-            else:
-                ob["lang_emb"] = np.repeat(self._ep_lang_emb[np.newaxis], len(ob["robot0_eef_pos"]), axis=0)
         ob = TensorUtils.to_tensor(ob)
-        if not batched:
-            ob = TensorUtils.to_batch(ob)
+        ob = TensorUtils.to_batch(ob)
         ob = TensorUtils.to_device(ob, self.policy.device)
         ob = TensorUtils.to_float(ob)
         return ob
@@ -669,7 +667,7 @@ class RolloutPolicy(object):
         """Pretty print network description"""
         return self.policy.__repr__()
 
-    def __call__(self, ob, goal=None, skill=None, lang_emb=None, batched=False):
+    def __call__(self, ob, goal=None):
         """
         Produce action from raw observation dict (and maybe goal dict) from environment.
 
@@ -677,15 +675,12 @@ class RolloutPolicy(object):
             ob (dict): single observation dictionary from environment (no batch dimension, 
                 and np.array values for each key)
             goal (dict): goal observation
-            batched (bool): whether the input is already batched
         """
-        ob = self._prepare_observation(ob, batched=batched)
+        ob = self._prepare_observation(ob)
         if goal is not None:
-            goal = self._prepare_observation(goal, batched=batched)
-        ac = self.policy.get_action(obs_dict=ob, goal_dict=goal, lang_emb=lang_emb, skill=skill)
-        if not batched:
-            ac = ac[0]
-        ac = TensorUtils.to_numpy(ac)
+            goal = self._prepare_observation(goal)
+        ac = self.policy.get_action(obs_dict=ob, goal_mode=self.goal_mode, eval_mode=self.eval_mode)
+        ac = TensorUtils.to_numpy(ac[0])
         if self.action_normalization_stats is not None:
             action_keys = self.policy.global_config.train.action_keys
             action_shapes = {k: self.action_normalization_stats[k]["offset"].shape[1:] for k in self.action_normalization_stats}

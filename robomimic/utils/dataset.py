@@ -6,25 +6,19 @@ import os
 import h5py
 import numpy as np
 import random
-import json
-import math
 from copy import deepcopy
 from contextlib import contextmanager
 from collections import OrderedDict
-from PIL import Image
+import time
+import psutil
 
 import torch.utils.data
-import torch
 
 import robomimic.utils.tensor_utils as TensorUtils
-import robomimic.utils.torch_utils as TorchUtils
 import robomimic.utils.obs_utils as ObsUtils
 import robomimic.utils.action_utils as AcUtils
 import robomimic.utils.log_utils as LogUtils
-import robomimic.utils.lang_utils as LangUtils
-from robomimic.macros import LANG_EMB_KEY
 
-from transformers import AutoImageProcessor, CLIPImageProcessor
 
 class SequenceDataset(torch.utils.data.Dataset):
     def __init__(
@@ -46,9 +40,7 @@ class SequenceDataset(torch.utils.data.Dataset):
         filter_by_attribute=None,
         load_next_obs=True,
         shuffled_obs_key_groups=None,
-        lang_encoder=None,
-        dataset_lang=None,
-        skill=False,
+        truncated_geom_factor=None,
         skill_dir = None,
         skill_aug = False,
         aug_num = 0,
@@ -103,8 +95,6 @@ class SequenceDataset(torch.utils.data.Dataset):
             load_next_obs (bool): whether to load next_obs from the dataset
 
             shuffled_obs_key_groups (list): TODO
-
-            lang: TODO documentation
         """
         super(SequenceDataset, self).__init__()
 
@@ -116,6 +106,9 @@ class SequenceDataset(torch.utils.data.Dataset):
         self.skill_dir = skill_dir
         self.skill_aug = skill_aug
         self.aug_num = aug_num
+        
+        self.truncated_geom_factor = truncated_geom_factor
+
         assert hdf5_cache_mode in ["all", "low_dim", None]
         self.hdf5_cache_mode = hdf5_cache_mode
 
@@ -132,12 +125,6 @@ class SequenceDataset(torch.utils.data.Dataset):
 
         self.action_config = action_config
 
-        # set up lang and language embedding
-        self.dataset_lang = dataset_lang # language for entire dataset
-        
-        if "libero" in hdf5_path.lower():
-            self.dataset_lang = os.path.basename(hdf5_path).replace('_demo.hdf5', "").replace('_', ' ')
-
         self.n_frame_stack = frame_stack
         assert self.n_frame_stack >= 1
 
@@ -145,11 +132,8 @@ class SequenceDataset(torch.utils.data.Dataset):
         assert self.seq_length >= 1
 
         self.goal_mode = goal_mode
-        
-        # if self.goal_mode is not None:
-        #     assert self.goal_mode in ["last"]
-        # if not self.load_next_obs:
-        #     assert self.goal_mode != "last"  # we use last next_obs as goal
+        if self.goal_mode is not None:
+            assert self.goal_mode in ["last", "geom", "skill", "subgoal"]
 
         self.pad_seq_length = pad_seq_length
         self.pad_frame_stack = pad_frame_stack
@@ -164,6 +148,8 @@ class SequenceDataset(torch.utils.data.Dataset):
 
         # prepare for action normalization
         self.action_normalization_stats = None
+
+        print(self.hdf5_cache_mode) # Should be None
 
         # maybe store dataset in memory for fast access
         if self.hdf5_cache_mode in ["all", "low_dim"]:
@@ -194,6 +180,28 @@ class SequenceDataset(torch.utils.data.Dataset):
                 del self.hdf5_cache
                 self.hdf5_cache = None
         else:
+
+            ### EVEN WHEN CACHING IS NONE, TRY AND LOAD THEN DELETE
+            ### WHY? TO FILTER OUT BAD DATASETS AHEAD OF TIME
+            obs_keys_in_memory = self.obs_keys
+            # only store low-dim observations
+            obs_keys_in_memory = []
+            for k in self.obs_keys:
+                if ObsUtils.key_is_obs_modality(k, "low_dim"):
+                    obs_keys_in_memory.append(k)
+            self.obs_keys_in_memory = obs_keys_in_memory
+
+            self.hdf5_cache = self.load_dataset_in_memory(
+                demo_list=self.demos,
+                hdf5_file=self.hdf5_file,
+                obs_keys=self.obs_keys_in_memory,
+                dataset_keys=self.dataset_keys,
+                load_next_obs=self.load_next_obs
+            )
+            del self.hdf5_cache
+            del self.obs_keys_in_memory
+            self.obs_keys_in_memory = None
+
             self.hdf5_cache = None
 
         if shuffled_obs_key_groups is None:
@@ -231,28 +239,13 @@ class SequenceDataset(torch.utils.data.Dataset):
         self._index_to_demo_id = dict()  # maps every index to a demo id
         self._demo_id_to_start_indices = dict()  # gives start index per demo id
         self._demo_id_to_demo_length = dict()
-        self._demo_id_to_demo_lang_str = dict() # language annotation per demo id
-        self._demo_id_to_demo_lang_emb = dict() # language embedding per demo id
 
         # determine index mapping
         self.total_num_sequences = 0
-        from tqdm import tqdm
         for ep in self.demos:
             demo_length = self.hdf5_file["data/{}".format(ep)].attrs["num_samples"]
             self._demo_id_to_start_indices[ep] = self.total_num_sequences
             self._demo_id_to_demo_length[ep] = demo_length
-
-            # get language string
-            if self.dataset_lang is not None:
-                self._demo_id_to_demo_lang_str[ep] = self.dataset_lang
-            else:
-                ep_meta = self.hdf5_file["data/{}".format(ep)].attrs.get("ep_meta", None)
-                if ep_meta is not None:
-                    ep_meta = json.loads(ep_meta)
-                    lang = ep_meta.get("lang", "dummy")
-                    if lang is not None:
-                        self._demo_id_to_demo_lang_str[ep] = lang
-            # print(self._demo_id_to_demo_lang_str[ep])
 
             num_sequences = demo_length
             # determine actual number of sequences taking into account whether to pad for frame_stack and seq_length
@@ -270,23 +263,6 @@ class SequenceDataset(torch.utils.data.Dataset):
             for _ in range(num_sequences):
                 self._index_to_demo_id[self.total_num_sequences] = ep
                 self.total_num_sequences += 1
-
-        device = TorchUtils.get_torch_device(try_to_use_cuda=True)
-        lang_encoder = LangUtils.LangEncoder(
-            device=device,
-        )
-        
-        if len(self._demo_id_to_demo_lang_str) > 0:
-            print("getting language embeddings...")
-            for ep_batch in tqdm(np.array_split(self.demos, int(math.ceil(len(self.demos) / 64)))):
-                # get language embedding
-                lang_batch = [self._demo_id_to_demo_lang_str[ep] for ep in ep_batch]
-                emb_batch = lang_encoder.get_lang_emb(lang_batch)
-                emb_batch = TensorUtils.to_numpy(emb_batch)
-                for batch_idx, ep in enumerate(ep_batch):
-                    self._demo_id_to_demo_lang_emb[ep] = emb_batch[batch_idx]
-
-        del lang_encoder
 
     @property
     def hdf5_file(self):
@@ -425,6 +401,7 @@ class SequenceDataset(torch.utils.data.Dataset):
         action_traj = dict()
         for key in self.action_keys:
             action_traj[key] = self.hdf5_file["data/{}/{}".format(ep, key)][()].astype('float32')
+        self.close_and_delete_hdf5_handle()
         return action_traj
    
     def get_action_stats(self):
@@ -536,11 +513,24 @@ class SequenceDataset(torch.utils.data.Dataset):
 
         # determine goal index
         goal_index = None
+        action_padding_len = None
         if self.goal_mode == "last":
             goal_index = end_index_in_demo - 1
-        elif self.goal_mode == "skill":
-            skill_interval = 20
-            goal_index = index_in_demo
+        elif self.goal_mode == "geom":
+            assert self.truncated_geom_factor is not None
+            num_options = end_index_in_demo - 1 - index_in_demo
+            if num_options <= self.seq_length:
+                goal_index = end_index_in_demo - 1
+            else:
+                geom_sample_index = 1 + int(truncated_geometric(p=self.truncated_geom_factor / num_options, truncate_threshold=num_options-1, size=1))
+                goal_index = index_in_demo + geom_sample_index
+
+                # Clamp to end of demo if goal_index is too high
+                if goal_index >= end_index_in_demo:
+                    goal_index = end_index_in_demo - 1
+                elif geom_sample_index <= self.seq_length:
+                    # If it happens that you sample a goal_index within seq_length away from the current index, compute appropriate action padding
+                    action_padding_len = self.seq_length - geom_sample_index - 1
 
         meta["obs"] = self.get_obs_sequence_from_demo(
             demo_id,
@@ -548,9 +538,9 @@ class SequenceDataset(torch.utils.data.Dataset):
             keys=self.obs_keys,
             num_frames_to_stack=self.n_frame_stack - 1,
             seq_length=self.seq_length,
-            prefix="obs"
+            prefix="obs",
+            action_padding_len=action_padding_len
         )
-        
 
         if self.load_next_obs:
             meta["next_obs"] = self.get_obs_sequence_from_demo(
@@ -562,10 +552,19 @@ class SequenceDataset(torch.utils.data.Dataset):
                 prefix="next_obs"
             )
 
+        # if goal_index is not None:
+        #     goal = self.get_obs_sequence_from_demo(
+        #         demo_id,
+        #         index_in_demo=goal_index,
+        #         keys=self.obs_keys,
+        #         num_frames_to_stack=0,
+        #         seq_length=1,
+        #         prefix="next_obs" if self.load_next_obs else "obs",
+        #     )
+        #     meta["goal_obs"] = {k: goal[k][0] for k in goal}  # remove sequence dimension for goal
         if self.goal_mode == "skill":
             task_name = os.path.basename(os.path.splitext(self.hdf5_path)[0])
-            
-
+        
             meta['goal_obs'] = {}
             
             if self.skill_aug:
@@ -577,19 +576,8 @@ class SequenceDataset(torch.utils.data.Dataset):
                 base_skill_path = os.path.join(self.skill_dir, task_name, demo_id, 'base.npy')
                 base_skill = np.load(base_skill_path)
                 meta["goal_obs"]["skill"] = base_skill[index_in_demo]
-                
 
-            # goal = self.get_obs_sequence_from_demo(
-            #     demo_id,
-            #     index_in_demo=goal_index,
-            #     keys=['skill'],
-            #     num_frames_to_stack=0,
-            #     seq_length=1,
-            #     prefix="obs",
-            # )
-            # # meta['goal_obs']['demo_id'] = demo_id
 
-                
         # get action components
         ac_dict = OrderedDict()
         for k in self.action_keys:
@@ -608,23 +596,10 @@ class SequenceDataset(torch.utils.data.Dataset):
 
         # also return the sampled index
         meta["index"] = index
-        # meta['lang_str'] = self._demo_id_to_demo_lang_str[demo_id]
-        
-        if demo_id in self._demo_id_to_demo_lang_emb:
-            # language embedding
-            T = meta["actions"].shape[0]
-            # meta["obs"][LANG_EMB_KEY] = np.tile(
-            #     self._demo_id_to_demo_lang_emb[demo_id],
-            #     (T, 1)
-            # )
-            meta[LANG_EMB_KEY] = np.tile(
-                self._demo_id_to_demo_lang_emb[demo_id],
-                (T, 1)
-            )
 
         return meta
 
-    def get_sequence_from_demo(self, demo_id, index_in_demo, keys, num_frames_to_stack=0, seq_length=1):
+    def get_sequence_from_demo(self, demo_id, index_in_demo, keys, num_frames_to_stack=0, seq_length=1, action_padding_len=None):
         """
         Extract a (sub)sequence of data items from a demo given the @keys of the items.
 
@@ -652,6 +627,10 @@ class SequenceDataset(torch.utils.data.Dataset):
         seq_begin_pad = max(0, num_frames_to_stack - index_in_demo)  # pad for frame stacking
         seq_end_pad = max(0, index_in_demo + seq_length - demo_length)  # pad for sequence length
 
+        if action_padding_len is not None:
+            seq_end_pad = action_padding_len + 1
+            seq_end_index = seq_end_index - action_padding_len - 1
+
         # make sure we are not padding if specified.
         if not self.pad_frame_stack:
             assert seq_begin_pad == 0
@@ -670,7 +649,7 @@ class SequenceDataset(torch.utils.data.Dataset):
 
         return seq, pad_mask
 
-    def get_obs_sequence_from_demo(self, demo_id, index_in_demo, keys, num_frames_to_stack=0, seq_length=1, prefix="obs"):
+    def get_obs_sequence_from_demo(self, demo_id, index_in_demo, keys, num_frames_to_stack=0, seq_length=1, prefix="obs", action_padding_len=None):
         """
         Extract a (sub)sequence of observation items from a demo given the @keys of the items.
 
@@ -691,6 +670,7 @@ class SequenceDataset(torch.utils.data.Dataset):
             keys=tuple('{}/{}'.format(prefix, k) for k in keys),
             num_frames_to_stack=num_frames_to_stack,
             seq_length=seq_length,
+            action_padding_len=action_padding_len
         )
         obs = {'/'.join(k.split('/')[1:]): obs[k] for k in obs}  # strip the prefix
         if self.get_pad_mask:
@@ -767,13 +747,14 @@ class SequenceDataset(torch.utils.data.Dataset):
         return None
 
 
-class R2D2Dataset(SequenceDataset):
+class DROIDDataset(SequenceDataset):
     def get_action_traj(self, ep):
         action_traj = dict()
         for key in self.action_keys:
             action_traj[key] = self.hdf5_file[key][()].astype('float32')
             if len(action_traj[key].shape) == 1:
                 action_traj[key] = np.reshape(action_traj[key], (-1, 1))
+        self.close_and_delete_hdf5_handle()
 
         return action_traj
 
@@ -796,8 +777,6 @@ class R2D2Dataset(SequenceDataset):
         self._index_to_demo_id = dict()  # maps every index to a demo id
         self._demo_id_to_start_indices = dict()  # gives start index per demo id
         self._demo_id_to_demo_length = dict()
-        self._demo_id_to_demo_lang_str = dict() # language annotation per demo id
-        self._demo_id_to_demo_lang_emb = dict() # language embedding per demo id
 
         # segment time stamps
         self._demo_id_to_segments = dict()
@@ -806,21 +785,9 @@ class R2D2Dataset(SequenceDataset):
 
         # determine index mapping
         self.total_num_sequences = 0
-        demo_length = self.hdf5_file["action/cartesian_velocity"].shape[0]
+        demo_length = self.hdf5_file["action/abs_pos"].shape[0]
         self._demo_id_to_start_indices[ep] = self.total_num_sequences
         self._demo_id_to_demo_length[ep] = demo_length
-
-        # get language string
-        if self.dataset_lang is not None:
-            self._demo_id_to_demo_lang_str[ep] = self.dataset_lang
-        else:
-            ep_meta = self.hdf5_file["data/{}".format(ep)].attrs.get("ep_meta", None)
-            if ep_meta is not None:
-                ep_meta = json.loads(ep_meta)
-                lang = ep_meta.get("lang", "dummy")
-                if lang is not None:
-                    self._demo_id_to_demo_lang_str[ep] = lang
-        # print(self._demo_id_to_demo_lang_str[ep])
 
         # seperate demo into segments for better alignment
         gripper_actions = list(self.hdf5_file["action/gripper_position"])
@@ -853,22 +820,6 @@ class R2D2Dataset(SequenceDataset):
             self._index_to_demo_id[self.total_num_sequences] = ep
             self.total_num_sequences += 1
 
-        device = TorchUtils.get_torch_device(try_to_use_cuda=True)
-        lang_encoder = LangUtils.LangEncoder(
-            device=device,
-        )
-        
-        print("getting language embeddings...")
-        for ep_batch in np.array_split(self.demos, int(math.ceil(len(self.demos) / 64))):
-            # get language embedding
-            lang_batch = [self._demo_id_to_demo_lang_str[ep] for ep in ep_batch]
-            emb_batch = lang_encoder.get_lang_emb(lang_batch)
-            emb_batch = TensorUtils.to_numpy(emb_batch)
-            for batch_idx, ep in enumerate(ep_batch):
-                self._demo_id_to_demo_lang_emb[ep] = emb_batch[batch_idx]
-
-        del lang_encoder
-
     def load_dataset_in_memory(self, demo_list, hdf5_file, obs_keys, dataset_keys, load_next_obs):
         """
         Loads the hdf5 dataset into memory, preserving the structure of the file. Note that this
@@ -891,9 +842,10 @@ class R2D2Dataset(SequenceDataset):
         for ep in LogUtils.custom_tqdm(demo_list):
             all_data[ep] = {}
             all_data[ep]["attrs"] = {}
-            all_data[ep]["attrs"]["num_samples"] = hdf5_file["action/cartesian_velocity"].shape[0] # hack to get traj len
+            all_data[ep]["attrs"]["num_samples"] = hdf5_file["action/abs_pos"].shape[0] # hack to get traj len
             # get obs
-            all_data[ep]["obs"] = {k: hdf5_file["observation/{}".format(k)][()].astype('float32') for k in obs_keys}
+            ## Dont make strings floats
+            all_data[ep]["obs"] = {k: hdf5_file["observation/{}".format(k)][()].astype('float32') if ("raw" not in k) else hdf5_file["observation/{}".format(k)][()] for k in obs_keys}
             if load_next_obs:
                 raise NotImplementedError
             # get other dataset keys
@@ -937,11 +889,12 @@ class R2D2Dataset(SequenceDataset):
         else:
             # read from file
             hd5key = "{}".format(key) #"data/{}/{}".format(ep, key)
-            ret = self.hdf5_file[hd5key]
+            ret = self.hdf5_file[hd5key][:]
+        self.close_and_delete_hdf5_handle()
         return ret
 
     
-    def get_sequence_from_demo(self, demo_id, index_in_demo, keys, num_frames_to_stack=0, seq_length=1):
+    def get_sequence_from_demo(self, demo_id, index_in_demo, keys, num_frames_to_stack=0, seq_length=1, action_padding_len=None):
         """
         Extract a (sub)sequence of data items from a demo given the @keys of the items.
 
@@ -969,6 +922,10 @@ class R2D2Dataset(SequenceDataset):
         seq_begin_pad = max(0, num_frames_to_stack - index_in_demo)  # pad for frame stacking
         seq_end_pad = max(0, index_in_demo + seq_length - demo_length)  # pad for sequence length
 
+        if action_padding_len is not None:
+            seq_end_pad = action_padding_len + 1
+            seq_end_index = seq_end_index - action_padding_len - 1
+
         # make sure we are not padding if specified.
         if not self.pad_frame_stack:
             assert seq_begin_pad == 0
@@ -979,7 +936,11 @@ class R2D2Dataset(SequenceDataset):
         seq = dict()
         for k in keys:
             data = self.get_dataset_for_ep(demo_id, k)
-            seq[k] = data[seq_begin_index: seq_end_index].astype("float32")
+            # Dont make strings floats
+            if "raw" not in k:
+                seq[k] = data[seq_begin_index: seq_end_index].astype("float32")
+            else:
+                seq[k] = data[seq_begin_index: seq_end_index].astype("string_")
         
         seq = TensorUtils.pad_sequence(seq, padding=(seq_begin_pad, seq_end_pad), pad_same=True)
         pad_mask = np.array([0] * seq_begin_pad + [1] * (seq_end_index - seq_begin_index) + [0] * seq_end_pad)
@@ -1015,8 +976,24 @@ class R2D2Dataset(SequenceDataset):
 
         # determine goal index
         goal_index = None
+        action_padding_len = None
         if self.goal_mode == "last":
             goal_index = end_index_in_demo - 1
+        elif self.goal_mode == "geom":
+            assert self.truncated_geom_factor is not None
+            num_options = end_index_in_demo - 1 - index_in_demo
+            if num_options <= self.seq_length:
+                goal_index = end_index_in_demo - 1
+            else: 
+                geom_sample_index = 1 + int(truncated_geometric(p=self.truncated_geom_factor / num_options, truncate_threshold=num_options-1, size=1))
+                goal_index = index_in_demo + geom_sample_index
+
+                # Clamp to end of demo if goal_index is too high
+                if goal_index >= end_index_in_demo:
+                    goal_index = end_index_in_demo - 1
+                elif geom_sample_index <= self.seq_length:
+                    # If it happens that you sample a goal_index within seq_length away from the current index, compute appropriate action padding
+                    action_padding_len = self.seq_length - geom_sample_index - 1
 
         meta["obs"] = self.get_obs_sequence_from_demo(
             demo_id,
@@ -1024,7 +1001,8 @@ class R2D2Dataset(SequenceDataset):
             keys=self.obs_keys,
             num_frames_to_stack=self.n_frame_stack - 1,
             seq_length=self.seq_length,
-            prefix="observation"
+            prefix="observation",
+            action_padding_len=action_padding_len
         )
 
         if self.load_next_obs:
@@ -1044,10 +1022,16 @@ class R2D2Dataset(SequenceDataset):
                 keys=self.obs_keys,
                 num_frames_to_stack=0,
                 seq_length=1,
-                prefix="next_obs",
+                prefix="next_obs" if self.load_next_obs else "observation",
             )
-            meta["goal_obs"] = {k: goal[k][0] for k in goal}  # remove sequence dimension for goal
-        
+
+            image_keys = [k for k in goal.keys() if "camera/image" in k]
+            for k in image_keys:
+                obs_image = meta['obs'][k]
+                N, H, W, C = obs_image.shape
+                goal_image = goal[k]
+                meta['obs'][k] = np.concatenate([obs_image, goal_image.repeat(N, 0)], axis = -1)
+
         # get action components
         ac_dict = OrderedDict()
         for k in self.action_keys:
@@ -1058,6 +1042,7 @@ class R2D2Dataset(SequenceDataset):
             ac_dict[k] = ac
        
         # normalize actions
+        # if "oxe_hdf5" not in self.hdf5_path: # IF ONLY NORMALIZING IN DOMAIN 
         action_normalization_stats = self.get_action_normalization_stats()
         ac_dict = ObsUtils.normalize_dict(ac_dict, normalization_stats=action_normalization_stats)
 
@@ -1072,31 +1057,11 @@ class R2D2Dataset(SequenceDataset):
         # also return the sampled index
         meta["index"] = index
 
-        # language embedding
-        T = meta["actions"].shape[0]
-        if "demo_id" in self._demo_id_to_demo_lang_emb.keys():
-            meta["obs"][LANG_EMB_KEY] = np.tile(
-                self._demo_id_to_demo_lang_emb[demo_id],
-                (T, 1)
-            )
-
+        ## Moves instructions from numpy strings to a normal list of strings and does some cleanup
+        for k in meta['obs'].keys():
+            if "raw" in k:
+                meta['obs'][k] = [str(s[0])[2:-1] for s in meta['obs'][k]]
         return meta
-
-class CustomWeightedRandomSampler(torch.utils.data.WeightedRandomSampler):
-    """
-    WeightedRandomSampler except allows for more than 2^24 samples to be sampled
-    copied from https://github.com/pytorch/pytorch/issues/2576#issuecomment-831780307
-    """
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-
-    def __iter__(self):
-        rand_tensor = np.random.choice(range(0, len(self.weights)),
-                                       size=self.num_samples,
-                                       p=self.weights.numpy() / torch.sum(self.weights).numpy(),
-                                       replace=self.replacement)
-        rand_tensor = torch.from_numpy(rand_tensor)
-        return iter(rand_tensor.tolist())
 
 
 class MetaDataset(torch.utils.data.Dataset):
@@ -1105,10 +1070,12 @@ class MetaDataset(torch.utils.data.Dataset):
         datasets,
         ds_weights,
         normalize_weights_by_ds_size=False,
+        ds_labels=None,
     ):
         super(MetaDataset, self).__init__()
         self.datasets = datasets
         ds_lens = np.array([len(ds) for ds in self.datasets])
+        self.ds_lens = ds_lens
         if normalize_weights_by_ds_size:
             self.ds_weights = np.array(ds_weights) / ds_lens
         else:
@@ -1119,9 +1086,26 @@ class MetaDataset(torch.utils.data.Dataset):
         # dataset will change after the datasets are already initialized
         for ds in self.datasets:
             assert ds.hdf5_cache_mode != "all"
+        
+        # compute ds_labels to one hot ids
+        if ds_labels is None:
+            self.ds_labels = ["dummy"]
+        else:
+            self.ds_labels = ds_labels
+
+        unique_labels = sorted(set(self.ds_labels))
+
+        self.ds_labels_to_ids = {}
+        for i, label in enumerate(sorted(unique_labels)):
+            one_hot_id = np.zeros(len(unique_labels))
+            one_hot_id[i] = 1.0
+            self.ds_labels_to_ids[label] = one_hot_id
 
         # TODO: comment
         action_stats = self.get_action_stats()
+        ## IF ONLY NORMALZING IN DOMAIN
+        # non_oxe_datasets = [p for p in self.datasets if "oxe_hdf5" not in p.hdf5_path]
+        # print(non_oxe_datasets[0].action_config)
         self.action_normalization_stats = action_stats_to_normalization_stats(
             action_stats, self.datasets[0].action_config)
         self.set_action_normalization_stats(self.action_normalization_stats)
@@ -1134,6 +1118,8 @@ class MetaDataset(torch.utils.data.Dataset):
         ind_in_ds = idx - self._ds_ind_bins[ds_ind]
         meta = self.datasets[ds_ind].__getitem__(ind_in_ds)
         meta["index"] = idx
+        ds_label = self.ds_labels[ds_ind]
+        T = meta["actions"].shape[0]
         return meta
 
     def get_ds_label(self, idx):
@@ -1151,30 +1137,44 @@ class MetaDataset(torch.utils.data.Dataset):
         return str_output
 
     def get_dataset_sampler(self):
-        if np.all(np.array(self.ds_weights) == 1):
-            """
-            if all weights are 1, then no need to use weighted sampler
-            """
-            return None
-        
         weights = np.ones(len(self))
         for i, (start, end) in enumerate(zip(self._ds_ind_bins[:-1], self._ds_ind_bins[1:])):
-            weights[start:end] = self.ds_weights[i]
+            ### IMPORTANT TO DIVIDE BY LEN
+            ### MAKES SURE THE WEIGHTING ASSIGNED TO A DEMO IS EVENLY DISTRIBUTED ACROSS
+            ### ITS TRANSITIONS. OTHERWISE LONGER TRAJECTORIES GET ARTIFICIALLY UPWEIGHTED
+            weights[start:end] = self.ds_weights[i] / self.ds_lens[i]
 
-        # sampler = torch.utils.data.WeightedRandomSampler(
         sampler = CustomWeightedRandomSampler(
             weights=weights,
             num_samples=len(self),
             replacement=True,
         )
+        ## CANT HANDLE OXE
+        # sampler = torch.utils.data.WeightedRandomSampler(
+        #     weights=weights,
+        #     num_samples=len(self),
+        #     replacement=True,
+        # )
         return sampler
 
     def get_action_stats(self):
+        ## IF ONLY NORMALIZING IN DOMAIN
+        # non_oxe_datasets = [p for p in self.datasets if "oxe_hdf5" not in p.hdf5_path]
         meta_action_stats = self.datasets[0].get_action_stats()
-        for dataset in self.datasets[1:]:
+        numd = len(self.datasets)
+        # for i, dataset in enumerate(self.datasets[1:]):
+        for i in range(1, numd):
+            t0 = time.time()
+            dataset = self.datasets[i]
             ds_action_stats = dataset.get_action_stats()
+            t1 = time.time()
             meta_action_stats = _aggregate_traj_stats(meta_action_stats, ds_action_stats)
-            
+            t2 = time.time()
+            del dataset
+            del ds_action_stats
+            print(f"{i} / {numd} Normalizations completed in {t2 - t0}, {t1-t0}, {t2-t1}")
+            print(f"TOTAL RAM: {psutil.Process().memory_info().rss / (1024 ** 2)}")
+
         return meta_action_stats
     
     def set_action_normalization_stats(self, action_normalization_stats):
@@ -1195,6 +1195,19 @@ class MetaDataset(torch.utils.data.Dataset):
             self.action_normalization_stats = action_stats_to_normalization_stats(
                 action_stats, self.datasets[0].action_config)
         return self.action_normalization_stats
+
+class CustomWeightedRandomSampler(torch.utils.data.WeightedRandomSampler):
+    """WeightedRandomSampler except allows for more than 2^24 samples to be sampled"""
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+    def __iter__(self):
+        rand_tensor = np.random.choice(range(0, len(self.weights)),
+                                       size=self.num_samples,
+                                       p=self.weights.numpy() / torch.sum(self.weights).numpy(),
+                                       replace=self.replacement)
+        rand_tensor = torch.from_numpy(rand_tensor)
+        return iter(rand_tensor.tolist())
 
 def _compute_traj_stats(traj_obs_dict):
     """
@@ -1293,3 +1306,28 @@ def action_stats_to_normalization_stats(action_stats, action_config):
                 'action_config.actions.normalization: "{}" is not supported'.format(norm_method))
     
     return action_normalization_stats
+
+def truncated_geometric(p, truncate_threshold, size, new_value=None):
+    """
+    Sample from geometric, but truncated values to `truncated_threshold`.
+    This geometric has support from {0, 1, 2, ...}, meaning it includes 0.
+    All values greater than `truncated_threshold` will be set to `new_value`.
+    If `new_value` is None, then they will be assigned random integers from 0 to
+    `truncate_threshold`.
+    :param p: probability parameter for geometric distribution
+    :param truncate_threshold: Cut-off
+    :param size: size of sample
+    :param new_value:
+    :return:
+    """
+    # numpy default does not include zero
+    samples = np.random.geometric(p, size) - 1
+    samples_too_large = samples > truncate_threshold
+    num_bad = sum(samples_too_large)
+    if new_value is None:
+        samples[samples > truncate_threshold] = (
+            np.random.randint(0, truncate_threshold, num_bad)
+        )
+    else:
+        samples[samples > truncate_threshold] = new_value
+    return samples
