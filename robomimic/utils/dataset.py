@@ -531,7 +531,14 @@ class SequenceDataset(torch.utils.data.Dataset):
                 elif geom_sample_index <= self.seq_length:
                     # If it happens that you sample a goal_index within seq_length away from the current index, compute appropriate action padding
                     action_padding_len = self.seq_length - geom_sample_index - 1
-
+        elif self.goal_mode == "subgoal":
+            low_interval = 20
+            high_interval = 40
+            random_interval = random.randint(low_interval, high_interval)
+            goal_index = index_in_demo + random_interval
+            if goal_index >= end_index_in_demo:
+                goal_index = end_index_in_demo - 1
+                
         meta["obs"] = self.get_obs_sequence_from_demo(
             demo_id,
             index_in_demo=index_in_demo,
@@ -576,7 +583,16 @@ class SequenceDataset(torch.utils.data.Dataset):
                 base_skill_path = os.path.join(self.skill_dir, task_name, demo_id, 'base.npy')
                 base_skill = np.load(base_skill_path)
                 meta["goal_obs"]["skill"] = base_skill[index_in_demo]
-
+        if self.goal_mode == "subgoal":
+            goal = self.get_obs_sequence_from_demo(
+                demo_id,
+                index_in_demo=goal_index,
+                keys=self.obs_keys,
+                num_frames_to_stack=0,
+                seq_length=1,
+                prefix="next_obs" if self.load_next_obs else "obs",
+            )
+            meta["goal_obs"] = {k: goal[k][0] for k in goal}  # remove sequence dimension for goal
 
         # get action components
         ac_dict = OrderedDict()
@@ -1031,6 +1047,7 @@ class DROIDDataset(SequenceDataset):
                 N, H, W, C = obs_image.shape
                 goal_image = goal[k]
                 meta['obs'][k] = np.concatenate([obs_image, goal_image.repeat(N, 0)], axis = -1)
+        
 
         # get action components
         ac_dict = OrderedDict()

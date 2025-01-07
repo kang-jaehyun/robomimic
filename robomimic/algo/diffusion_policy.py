@@ -86,10 +86,31 @@ class DiffusionPolicyUNet(PolicyAlgo):
         obs_dim = obs_encoder.output_shape()[0]
 
         # create network object
-        noise_pred_net = ConditionalUnet1D(
-            input_dim=self.ac_dim,
-            global_cond_dim=obs_dim*self.algo_config.horizon.observation_horizon
-        )
+        if self.algo_config.skill.enabled:
+            self.skill_dim = self.algo_config.skill.skill_dim
+
+            noise_pred_net = ConditionalUnet1D(
+                input_dim=self.ac_dim,
+                global_cond_dim=obs_dim*self.algo_config.horizon.observation_horizon + self.skill_dim
+            )
+        elif self.algo_config.subgoal.enabled:
+            noise_pred_net = ConditionalUnet1D(
+                input_dim=self.ac_dim,
+                global_cond_dim=obs_dim*(self.algo_config.horizon.observation_horizon + 1) # +1 for subgoal
+            )
+        # elif self.algo_config.lang.enabled:
+        #     # language condition
+        #     self.lang_dim = self.algo_config.lang.lang_dim
+        #     noise_pred_net = ConditionalUnet1D(
+        #         input_dim=self.ac_dim,
+        #         global_cond_dim=obs_dim*self.algo_config.horizon.observation_horizon + self.lang_dim
+        #     )
+        else:
+            # create network object
+            noise_pred_net = ConditionalUnet1D(
+                input_dim=self.ac_dim,
+                global_cond_dim=obs_dim*self.algo_config.horizon.observation_horizon
+            )
 
         # the final arch has 2 parts
         nets = nn.ModuleDict({
@@ -125,7 +146,8 @@ class DiffusionPolicyUNet(PolicyAlgo):
         # setup EMA
         ema = None
         if self.algo_config.ema.enabled:
-            ema = EMAModel(model=nets, power=self.algo_config.ema.power)
+            params = list(nets['policy']['obs_encoder'].parameters()) + list(nets['policy']['noise_pred_net'].parameters())
+            ema = EMAModel(model=nets, power=self.algo_config.ema.power, parameters=params)
                 
         # set attrs
         self.nets = nets
@@ -168,8 +190,11 @@ class DiffusionPolicyUNet(PolicyAlgo):
                 encoded_lang = outputs.last_hidden_state.sum(1).squeeze().unsqueeze(1).repeat(1, To, 1)
                 input_batch["obs"]["lang_fixed/language_distilbert"] = encoded_lang.type(torch.float32)
 
+        input_batch["goal_obs"] = batch.get("goal_obs", None) # goals may not be present
         input_batch["actions"] = batch["actions"][:, :Tp, :]
-        
+        if self.algo_config.skill.enabled:
+            input_batch["skill"] = input_batch["goal_obs"]['skill']
+            
         # check if actions are normalized to [-1,1]
         if not self.action_check_done:
             actions = input_batch["actions"]
@@ -225,6 +250,7 @@ class DiffusionPolicyUNet(PolicyAlgo):
             # encode obs
             inputs = {
                 'obs': batch["obs"],
+                'goal': batch["goal_obs"],
             }
             for k in self.obs_shapes:
                 ## Shape assertion does not apply to list of strings for raw language
@@ -237,6 +263,20 @@ class DiffusionPolicyUNet(PolicyAlgo):
             assert obs_features.ndim == 3  # [B, T, D]
             obs_cond = obs_features.flatten(start_dim=1)
 
+            if self.algo_config.skill.enabled:
+                skill = batch["skill"][:,0, :] # B, 1, skill_dim
+                obs_cond = torch.cat([obs_cond, skill], axis=-1)
+            
+            elif self.algo_config.subgoal.enabled:
+                # subgoal_dict = {"agentview_rgb" : batch["goal_obs"]["agentview_rgb"]}
+                # goal_encoder = self.nets['policy']['obs_encoder'].module.nets.obs.obs_nets['agentview_rgb']
+                subgoal_cond = self.nets['policy']['obs_encoder'](**{"obs" : batch["goal_obs"]})
+                obs_cond = torch.cat([obs_cond, subgoal_cond], axis=-1)
+                
+            # if self.algo_config.lang.enabled:
+                # lang = batch['lang_emb'][:,0, :] # B, 1, lang_dim, 2nd dim is T (Same across all T)
+                # obs_cond = torch.cat([obs_cond, lang], axis=-1)
+                
             num_noise_samples = self.algo_config.noise_samples
 
             # sample noise to add to actions
@@ -413,7 +453,7 @@ class DiffusionPolicyUNet(PolicyAlgo):
         # select network
         nets = self.nets
         if self.ema is not None:
-            nets = self.ema.averaged_model
+            nets = self.ema
         
         # encode obs
         inputs = {
@@ -468,7 +508,7 @@ class DiffusionPolicyUNet(PolicyAlgo):
         """
         return {
             "nets": self.nets.state_dict(),
-            "ema": self.ema.averaged_model.state_dict() if self.ema is not None else None,
+            "ema": self.ema.state_dict() if self.ema is not None else None,
         }
 
     def deserialize(self, model_dict):
@@ -481,7 +521,7 @@ class DiffusionPolicyUNet(PolicyAlgo):
         """
         self.nets.load_state_dict(model_dict["nets"])
         if model_dict.get("ema", None) is not None:
-            self.ema.averaged_model.load_state_dict(model_dict["ema"])
+            self.ema.load_state_dict(model_dict["ema"])
 
     
             
