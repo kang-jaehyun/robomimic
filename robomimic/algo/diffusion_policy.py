@@ -359,7 +359,7 @@ class DiffusionPolicyUNet(PolicyAlgo):
         self.obs_queue = obs_queue
         self.action_queue = action_queue
         
-    def get_action(self, obs_dict, goal_mode=None, eval_mode=False):
+    def get_action(self, obs_dict, skill=None, goal_dict=None, lang_emb=None, eval_mode=False):
         """
         Get policy action outputs.
 
@@ -412,32 +412,32 @@ class DiffusionPolicyUNet(PolicyAlgo):
         # make sure we have at least To observations in obs_queue
         # if not enough, repeat
         # if already full, append one to the obs_queue
-        # n_repeats = max(To - len(self.obs_queue), 1)
-        # self.obs_queue.extend([obs_dict] * n_repeats)
+        n_repeats = max(To - len(self.obs_queue), 1)
+        self.obs_queue.extend([obs_dict] * n_repeats)
         
         if len(self.action_queue) == 0:
             # no actions left, run inference
             # turn obs_queue into dict of tensors (concat at T dim)
             # import pdb; pdb.set_trace()
-            # obs_dict_list = TensorUtils.list_of_flat_dict_to_dict_of_list(list(self.obs_queue))
-            # obs_dict_tensor = dict((k, torch.cat(v, dim=0).unsqueeze(0)) for k,v in obs_dict_list.items())
+            obs_dict_list = TensorUtils.list_of_flat_dict_to_dict_of_list(list(self.obs_queue))
+            obs_dict_tensor = dict((k, torch.stack(v, dim=1)) for k,v in obs_dict_list.items())
             
             # run inference
             # [1,T,Da]
-            action_sequence = self._get_action_trajectory(obs_dict=obs_dict)
+            action_sequence = self._get_action_trajectory(obs_dict=obs_dict_tensor, goal_dict=goal_dict, skill=skill, lang_emb=lang_emb)
             
             # put actions into the queue
-            self.action_queue.extend(action_sequence[0])
-        
+            # self.action_queue.extend(action_sequence[0])
+            self.action_queue.append(action_sequence[:, 0])
         # has action, execute from left to right
         # [Da]
         action = self.action_queue.popleft()
         
         # [1,Da]
-        action = action.unsqueeze(0)
+        # action = action.unsqueeze(0)
         return action
         
-    def _get_action_trajectory(self, obs_dict):
+    def _get_action_trajectory(self, obs_dict, goal_dict=None, skill=None, lang_emb=None):
         assert not self.nets.training
         To = self.algo_config.horizon.observation_horizon
         Ta = self.algo_config.horizon.action_horizon
@@ -465,13 +465,19 @@ class DiffusionPolicyUNet(PolicyAlgo):
                 continue
             # first two dimensions should be [B, T] for inputs
             assert inputs['obs'][k].ndim - 2 == len(self.obs_shapes[k])
-        obs_features = TensorUtils.time_distributed({"obs":inputs["obs"]}, nets['policy']['obs_encoder'].module, inputs_as_kwargs=True)
+        obs_features = TensorUtils.time_distributed({"obs":inputs["obs"]}, self.nets['policy']['obs_encoder'].module, inputs_as_kwargs=True)
         assert obs_features.ndim == 3  # [B, T, D]
         B = obs_features.shape[0]
 
         # reshape observation to (B,obs_horizon*obs_dim)
         obs_cond = obs_features.flatten(start_dim=1)
-
+        if self.algo_config.skill.enabled:
+            skill = skill[:,-1, :]
+            obs_cond = torch.cat([obs_cond, skill], axis=-1)
+        
+        if self.algo_config.lang.enabled:
+            lang_emb = lang_emb[:,-1, :]
+            obs_cond = torch.cat([obs_cond, lang_emb], axis=-1)
 
         # initialize action from Guassian noise
         noisy_action = torch.randn(
@@ -483,7 +489,7 @@ class DiffusionPolicyUNet(PolicyAlgo):
 
         for k in self.noise_scheduler.timesteps:
             # predict noise
-            noise_pred = nets['policy']['noise_pred_net'].module(
+            noise_pred = self.nets['policy']['noise_pred_net'].module(
                 sample=naction, 
                 timestep=k,
                 global_cond=obs_cond
