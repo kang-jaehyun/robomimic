@@ -539,7 +539,6 @@ class SequenceDataset(torch.utils.data.Dataset):
         if self.goal_mode == "last":
             goal_index = end_index_in_demo - 1
         elif self.goal_mode == "skill":
-            skill_interval = 20
             goal_index = index_in_demo
 
         meta["obs"] = self.get_obs_sequence_from_demo(
@@ -562,23 +561,47 @@ class SequenceDataset(torch.utils.data.Dataset):
                 prefix="next_obs"
             )
 
-        if self.goal_mode == "skill":
+        elif self.goal_mode == "skill":
             task_name = os.path.basename(os.path.splitext(self.hdf5_path)[0])
             
-
             meta['goal_obs'] = {}
             
             if self.skill_aug:
                 aug_idx = random.randint(0, self.aug_num-1)
                 aug_skill_path = os.path.join(self.skill_dir, task_name, demo_id, 'aug_{}.npy'.format(aug_idx))
                 aug_skill = np.load(aug_skill_path)
-                meta["goal_obs"]["skill"] = aug_skill[index_in_demo]
+                meta["goal_obs"]["skill"] = aug_skill[goal_index]
             else:
                 base_skill_path = os.path.join(self.skill_dir, task_name, demo_id, 'base.npy')
                 base_skill = np.load(base_skill_path)
-                meta["goal_obs"]["skill"] = base_skill[index_in_demo]
+                meta["goal_obs"]["skill"] = base_skill[goal_index]
                 
-
+        elif self.goal_mode == "subgoal_hindsight":
+            goal_index = random.randint(index_in_demo, end_index_in_demo - 1)
+            if goal_index >= end_index_in_demo:
+                goal_index = end_index_in_demo - 1
+                
+            goal = self.get_obs_sequence_from_demo(
+                demo_id,
+                index_in_demo=goal_index,
+                keys=self.obs_keys,
+                num_frames_to_stack=0,
+                seq_length=1,
+                prefix="next_obs" if self.load_next_obs else "obs",
+            )
+            meta["goal_obs"] = {k: goal[k][0] for k in goal}  # remove sequence dimension for goal
+            
+        elif self.goal_mode == "last":
+            goal = self.get_obs_sequence_from_demo(
+                demo_id,
+                index_in_demo=goal_index,
+                keys=self.obs_keys,
+                num_frames_to_stack=0,
+                seq_length=1,
+                prefix="next_obs" if self.load_next_obs else "obs",
+            )
+            meta["goal_obs"] = {k: goal[k][0] for k in goal}  # remove sequence dimension for goal
+            
             # goal = self.get_obs_sequence_from_demo(
             #     demo_id,
             #     index_in_demo=goal_index,

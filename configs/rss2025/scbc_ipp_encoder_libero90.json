@@ -1,7 +1,7 @@
 {
     "algo_name": "diffusion_policy",
     "experiment": {
-        "name": "lcbc_baseline_libero90",
+        "name": "scbc_ipp_encoder_libero90",
         "validate": false,
         "logging": {
             "terminal_output_to_txt": true,
@@ -524,7 +524,10 @@
                 "do_eval": false
             }
         ],
-        "output_dir": "../expdata/rss2025_policy/lcbc_baseline_libero90",
+        "output_dir": "../expdata/rss2025_policy/scbc_ipp_encoder_libero90",
+        "skill_dir" : "/workspace/robomimic/datasets/LIBERO_ALL/libero_90_skill/combined_ipp_encoder/aug",
+        "skill_aug" : false,
+        "aug_num" : 2,
         "num_data_workers": 16,
         "hdf5_cache_mode": "low_dim",
         "hdf5_use_swmr": true,
@@ -538,7 +541,7 @@
         "dataset_keys": [
             "actions"
         ],
-        "goal_mode": null,
+        "goal_mode": "skill",
         "cuda": true,
         "batch_size": 256,
         "num_epochs": 2000,
@@ -599,11 +602,11 @@
             "prediction_horizon": 16
         },
         "skill": {
-            "enabled": false,
+            "enabled": true,
             "skill_dim": 64
         },
         "lang": {
-            "enabled": true,
+            "enabled": false,
             "lang_dim": 512
         },
         "unet": {
