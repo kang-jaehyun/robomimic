@@ -74,6 +74,15 @@ class DiffusionPolicyUNet(PolicyAlgo):
         if self.algo_config.skill.enabled:
             self.skill_dim = self.algo_config.skill.skill_dim
 
+            if self.algo_config.skill.dropout:
+                self.dropout = nn.Sequential(
+                    nn.Dropout(p=self.algo_config.skill.dropout_rate),
+                    nn.Linear(self.skill_dim, self.skill_dim),
+                    nn.LayerNorm(self.skill_dim),
+                    nn.ReLU(inplace=True),
+                    nn.Linear(self.skill_dim, self.skill_dim),
+                )
+                
             noise_pred_net = ConditionalUnet1D(
                 input_dim=self.ac_dim,
                 global_cond_dim=obs_dim*self.algo_config.horizon.observation_horizon + self.skill_dim
@@ -84,6 +93,14 @@ class DiffusionPolicyUNet(PolicyAlgo):
             noise_pred_net = ConditionalUnet1D(
                 input_dim=self.ac_dim,
                 global_cond_dim=obs_dim*self.algo_config.horizon.observation_horizon + self.lang_dim
+            )
+        elif self.algo_config.subgoal.enabled:
+            # language condition
+            
+            self.subgoal_dim = self.algo_config.subgoal.subgoal_dim
+            noise_pred_net = ConditionalUnet1D(
+                input_dim=self.ac_dim,
+                global_cond_dim=obs_dim*self.algo_config.horizon.observation_horizon + self.subgoal_dim
             )
         else:
             # create network object
@@ -96,9 +113,12 @@ class DiffusionPolicyUNet(PolicyAlgo):
         nets = nn.ModuleDict({
             'policy': nn.ModuleDict({
                 'obs_encoder': obs_encoder,
-                'noise_pred_net': noise_pred_net
+                'noise_pred_net': noise_pred_net,
             })
         })
+        
+        if self.algo_config.skill.dropout:
+            nets['policy']['dropout'] = self.dropout
 
 
         nets = nets.float().to(self.device)
@@ -205,12 +225,13 @@ class DiffusionPolicyUNet(PolicyAlgo):
             # encode obs
             inputs = {
                 'obs': batch["obs"],
-                'goal': batch["goal_obs"],
-                'lang_emb': batch['lang_emb']
+                # 'goal': batch["goal_obs"],
+                # 'lang_emb': batch['lang_emb']
             }
             for k in self.obs_shapes:
                 # first two dimensions should be [B, T] for inputs
                 assert inputs['obs'][k].ndim - 2 == len(self.obs_shapes[k])
+            
             
             obs_features = TensorUtils.time_distributed(inputs, self.nets['policy']['obs_encoder'], inputs_as_kwargs=True)
             assert obs_features.ndim == 3  # [B, T, D]
@@ -218,12 +239,18 @@ class DiffusionPolicyUNet(PolicyAlgo):
             obs_cond = obs_features.flatten(start_dim=1)
             
             if self.algo_config.skill.enabled:
+                if self.algo_config.skill.dropout:
+                    batch["skill"] = self.dropout(batch["skill"])
+                    
                 skill = batch["skill"][:,0, :] # B, 1, skill_dim
                 obs_cond = torch.cat([obs_cond, skill], axis=-1)
                     
             if self.algo_config.lang.enabled:
                 lang = batch['lang_emb'][:,0, :] # B, 1, lang_dim, 2nd dim is T (Same across all T)
                 obs_cond = torch.cat([obs_cond, lang], axis=-1)
+            if self.algo_config.subgoal.enabled:
+                subgoal_feature = self.nets['policy']['obs_encoder'].nets['obs'].obs_nets['agentview_rgb'](batch['goal_obs']['agentview_rgb'].permute(0,3,1,2)/255.0)
+                obs_cond = torch.cat([obs_cond, subgoal_feature], axis=-1)
                 
             # sample noise to add to actions
             noise = torch.randn(actions.shape, device=self.device)

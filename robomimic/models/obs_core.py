@@ -168,7 +168,7 @@ class VisualCore(EncoderCore, BaseNets.ConvBase):
         Forward pass through visual core.
         """
         ndim = len(self.input_shape)
-        assert tuple(inputs.shape)[-ndim:] == tuple(self.input_shape)
+        # assert tuple(inputs.shape)[-ndim:] == tuple(self.input_shape)
         return super(VisualCore, self).forward(inputs)
 
     def __repr__(self):

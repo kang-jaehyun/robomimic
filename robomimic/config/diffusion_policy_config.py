@@ -27,8 +27,13 @@ class DiffusionPolicyConfig(BaseConfig):
         self.algo.horizon.action_horizon = 8
         self.algo.horizon.prediction_horizon = 16
         
+        self.algo.subgoal.enabled = False
+        self.algo.subgoal.subgoal_dim = 64
+        
         self.algo.skill.enabled = False
-        self.algo.skill.skill_dim = 768
+        self.algo.skill.skill_dim = 64
+        self.algo.skill.dropout = False
+        self.algo.skill.dropout_rate = 0.2
         
         self.algo.lang.enabled = False
         self.algo.lang.lang_dim = 512
