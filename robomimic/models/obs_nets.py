@@ -209,6 +209,9 @@ class ObservationEncoder(Module):
         for k in self.obs_shapes:
             if self.obs_nets_classes[k] is not None:
                 # create net to process this modality
+                if k == "agentview_rgb":
+                    # special case: use ResNet18Conv for visual inputs
+                    self.obs_nets_kwargs[k]['shared'] = True
                 self.obs_nets[k] = ObsUtils.OBS_ENCODER_CORES[self.obs_nets_classes[k]](**self.obs_nets_kwargs[k])
             elif self.obs_share_mods[k] is not None:
                 # make sure net is shared with another modality

@@ -72,6 +72,7 @@ class VisualCore(EncoderCore, BaseNets.ConvBase):
         pool_kwargs=None,
         flatten=True,
         feature_dimension=64,
+        shared=False,
     ):
         """
         Args:
@@ -95,10 +96,13 @@ class VisualCore(EncoderCore, BaseNets.ConvBase):
 
         # add input channel dimension to visual core inputs
         backbone_kwargs["input_channel"] = input_shape[0]
-
+            
         # extract only relevant kwargs for this specific backbone
         backbone_kwargs = extract_class_init_kwargs_from_dict(cls=eval(backbone_class), dic=backbone_kwargs, copy=True)
 
+        if shared:
+            backbone_kwargs["shared"] = shared
+            
         # visual backbone
         assert isinstance(backbone_class, str)
         self.backbone = eval(backbone_class)(**backbone_kwargs)

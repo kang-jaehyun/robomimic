@@ -14,8 +14,14 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torchvision import models as vision_models
 from torchvision import transforms
+import torchvision
 
 import robomimic.utils.tensor_utils as TensorUtils
+
+import sys
+sys.path.append('/workspace/skill_transfer')
+
+from dynamics.idm import IDM
 
 CONV_ACTIVATIONS = {
     "relu": nn.ReLU,
@@ -487,6 +493,7 @@ class ResNet18Conv(ConvBase):
         input_channel=3,
         pretrained=False,
         input_coord_conv=False,
+        shared=False,
     ):
         """
         Args:
@@ -499,7 +506,28 @@ class ResNet18Conv(ConvBase):
         """
         super(ResNet18Conv, self).__init__()
         net = vision_models.resnet18(pretrained=pretrained)
-
+        if shared:
+            idm = IDM(
+                num_layers=8,
+                num_heads=4,
+                visual_channel=512, # resnet18
+                depth_channel=1,
+                d_model=256,
+                out_dim=768,
+                num_visual_tokens=196, # for CLIP
+                num_depth_tokens=196, # for resize to match visual tokens
+            )
+            state_dict = torch.load(f"/workspace/skill_transfer/outputs/combined_ipp_encoder/checkpoint-12250/idm.pth", map_location='cpu')
+            idm.load_state_dict(state_dict)
+            
+            # freeze parames
+            for param in net.parameters():
+                param.requires_grad = False
+            
+            normalize = torchvision.transforms.Normalize(
+                mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]
+            )
+            
         if input_coord_conv:
             net.conv1 = CoordConv2d(input_channel, 64, kernel_size=7, stride=2, padding=3, bias=False)
         elif input_channel != 3:
@@ -508,7 +536,13 @@ class ResNet18Conv(ConvBase):
         # cut the last fc layer
         self._input_coord_conv = input_coord_conv
         self._input_channel = input_channel
-        self.nets = torch.nn.Sequential(*(list(net.children())[:-2]))
+        if shared:
+            self.nets = torch.nn.Sequential(
+                normalize,
+                idm.visual_encoder,
+            )
+        else:
+            self.nets = torch.nn.Sequential(*(list(net.children())[:-2]))
 
     def output_shape(self, input_shape):
         """
@@ -537,6 +571,7 @@ class FiLMLayer(ConvBase):
     Uses Feature-wIse Linear Modulation to language condition a conv net
     """
     def __init__(
+        
         self,
         lang_emb_dim,
         channels,
