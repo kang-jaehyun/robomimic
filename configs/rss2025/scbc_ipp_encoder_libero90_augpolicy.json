@@ -1,0 +1,735 @@
+{
+    "algo_name": "diffusion_policy",
+    "experiment": {
+        "name": "scbc_ipp_encoder_libero90_augpolicy",
+        "validate": false,
+        "logging": {
+            "terminal_output_to_txt": true,
+            "log_tb": true,
+            "log_wandb": true,
+            "wandb_proj_name": "rss2025_policy"
+        },
+        "mse": {},
+        "save": {
+            "enabled": true,
+            "every_n_seconds": null,
+            "every_n_epochs": 50,
+            "epochs": [],
+            "on_best_validation": false,
+            "on_best_rollout_return": false,
+            "on_best_rollout_success_rate": false
+        },
+        "epoch_every_n_steps": 100,
+        "validation_epoch_every_n_steps": 10,
+        "env": null,
+        "additional_envs": null,
+        "render": false,
+        "render_video": false,
+        "keep_all_videos": false,
+        "video_skip": 5,
+        "rollout": {
+            "enabled": false,
+            "n": 20,
+            "horizon": 500,
+            "rate": 100,
+            "warmstart": 0,
+            "terminate_on_success": true
+        },
+        "env_meta_update_dict": {
+            "env_kwargs": {
+                "generative_textures": null,
+                "scene_split": null,
+                "style_ids": null,
+                "layout_ids": null,
+                "layout_and_style_ids": [
+                    [
+                        1,
+                        1
+                    ],
+                    [
+                        2,
+                        2
+                    ],
+                    [
+                        4,
+                        4
+                    ],
+                    [
+                        6,
+                        9
+                    ],
+                    [
+                        7,
+                        10
+                    ]
+                ],
+                "randomize_cameras": false,
+                "obj_instance_split": "B",
+                "controller_configs": {
+                    "control_delta": false
+                }
+            }
+        }
+    },
+    "train": {
+        "data": [
+            {
+                "path": "datasets/LIBERO_ALL/libero_90/KITCHEN_SCENE10_close_the_top_drawer_of_the_cabinet_and_put_the_black_bowl_on_top_of_it_demo.hdf5",
+                "horizon": 500,
+                "do_eval": false
+            },
+            {
+                "path": "datasets/LIBERO_ALL/libero_90/KITCHEN_SCENE10_close_the_top_drawer_of_the_cabinet_demo.hdf5",
+                "horizon": 500,
+                "do_eval": false
+            },
+            {
+                "path": "datasets/LIBERO_ALL/libero_90/KITCHEN_SCENE10_put_the_black_bowl_in_the_top_drawer_of_the_cabinet_demo.hdf5",
+                "horizon": 500,
+                "do_eval": false
+            },
+            {
+                "path": "datasets/LIBERO_ALL/libero_90/KITCHEN_SCENE10_put_the_butter_at_the_back_in_the_top_drawer_of_the_cabinet_and_close_it_demo.hdf5",
+                "horizon": 500,
+                "do_eval": false
+            },
+            {
+                "path": "datasets/LIBERO_ALL/libero_90/KITCHEN_SCENE10_put_the_butter_at_the_front_in_the_top_drawer_of_the_cabinet_and_close_it_demo.hdf5",
+                "horizon": 500,
+                "do_eval": false
+            },
+            {
+                "path": "datasets/LIBERO_ALL/libero_90/KITCHEN_SCENE10_put_the_chocolate_pudding_in_the_top_drawer_of_the_cabinet_and_close_it_demo.hdf5",
+                "horizon": 500,
+                "do_eval": false
+            },
+            {
+                "path": "datasets/LIBERO_ALL/libero_90/KITCHEN_SCENE1_open_the_bottom_drawer_of_the_cabinet_demo.hdf5",
+                "horizon": 500,
+                "do_eval": false
+            },
+            {
+                "path": "datasets/LIBERO_ALL/libero_90/KITCHEN_SCENE1_open_the_top_drawer_of_the_cabinet_and_put_the_bowl_in_it_demo.hdf5",
+                "horizon": 500,
+                "do_eval": false
+            },
+            {
+                "path": "datasets/LIBERO_ALL/libero_90/KITCHEN_SCENE1_open_the_top_drawer_of_the_cabinet_demo.hdf5",
+                "horizon": 500,
+                "do_eval": false
+            },
+            {
+                "path": "datasets/LIBERO_ALL/libero_90/KITCHEN_SCENE1_put_the_black_bowl_on_the_plate_demo.hdf5",
+                "horizon": 500,
+                "do_eval": false
+            },
+            {
+                "path": "datasets/LIBERO_ALL/libero_90/KITCHEN_SCENE1_put_the_black_bowl_on_top_of_the_cabinet_demo.hdf5",
+                "horizon": 500,
+                "do_eval": false
+            },
+            {
+                "path": "datasets/LIBERO_ALL/libero_90/KITCHEN_SCENE2_open_the_top_drawer_of_the_cabinet_demo.hdf5",
+                "horizon": 500,
+                "do_eval": false
+            },
+            {
+                "path": "datasets/LIBERO_ALL/libero_90/KITCHEN_SCENE2_put_the_black_bowl_at_the_back_on_the_plate_demo.hdf5",
+                "horizon": 500,
+                "do_eval": false
+            },
+            {
+                "path": "datasets/LIBERO_ALL/libero_90/KITCHEN_SCENE2_put_the_black_bowl_at_the_front_on_the_plate_demo.hdf5",
+                "horizon": 500,
+                "do_eval": false
+            },
+            {
+                "path": "datasets/LIBERO_ALL/libero_90/KITCHEN_SCENE2_put_the_middle_black_bowl_on_the_plate_demo.hdf5",
+                "horizon": 500,
+                "do_eval": false
+            },
+            {
+                "path": "datasets/LIBERO_ALL/libero_90/KITCHEN_SCENE2_put_the_middle_black_bowl_on_top_of_the_cabinet_demo.hdf5",
+                "horizon": 500,
+                "do_eval": false
+            },
+            {
+                "path": "datasets/LIBERO_ALL/libero_90/KITCHEN_SCENE2_stack_the_black_bowl_at_the_front_on_the_black_bowl_in_the_middle_demo.hdf5",
+                "horizon": 500,
+                "do_eval": false
+            },
+            {
+                "path": "datasets/LIBERO_ALL/libero_90/KITCHEN_SCENE2_stack_the_middle_black_bowl_on_the_back_black_bowl_demo.hdf5",
+                "horizon": 500,
+                "do_eval": false
+            },
+            {
+                "path": "datasets/LIBERO_ALL/libero_90/KITCHEN_SCENE3_put_the_frying_pan_on_the_stove_demo.hdf5",
+                "horizon": 500,
+                "do_eval": false
+            },
+            {
+                "path": "datasets/LIBERO_ALL/libero_90/KITCHEN_SCENE3_put_the_moka_pot_on_the_stove_demo.hdf5",
+                "horizon": 500,
+                "do_eval": false
+            },
+            {
+                "path": "datasets/LIBERO_ALL/libero_90/KITCHEN_SCENE3_turn_on_the_stove_and_put_the_frying_pan_on_it_demo.hdf5",
+                "horizon": 500,
+                "do_eval": false
+            },
+            {
+                "path": "datasets/LIBERO_ALL/libero_90/KITCHEN_SCENE3_turn_on_the_stove_demo.hdf5",
+                "horizon": 500,
+                "do_eval": false
+            },
+            {
+                "path": "datasets/LIBERO_ALL/libero_90/KITCHEN_SCENE4_close_the_bottom_drawer_of_the_cabinet_and_open_the_top_drawer_demo.hdf5",
+                "horizon": 500,
+                "do_eval": false
+            },
+            {
+                "path": "datasets/LIBERO_ALL/libero_90/KITCHEN_SCENE4_close_the_bottom_drawer_of_the_cabinet_demo.hdf5",
+                "horizon": 500,
+                "do_eval": false
+            },
+            {
+                "path": "datasets/LIBERO_ALL/libero_90/KITCHEN_SCENE4_put_the_black_bowl_in_the_bottom_drawer_of_the_cabinet_demo.hdf5",
+                "horizon": 500,
+                "do_eval": false
+            },
+            {
+                "path": "datasets/LIBERO_ALL/libero_90/KITCHEN_SCENE4_put_the_black_bowl_on_top_of_the_cabinet_demo.hdf5",
+                "horizon": 500,
+                "do_eval": false
+            },
+            {
+                "path": "datasets/LIBERO_ALL/libero_90/KITCHEN_SCENE4_put_the_wine_bottle_in_the_bottom_drawer_of_the_cabinet_demo.hdf5",
+                "horizon": 500,
+                "do_eval": false
+            },
+            {
+                "path": "datasets/LIBERO_ALL/libero_90/KITCHEN_SCENE4_put_the_wine_bottle_on_the_wine_rack_demo.hdf5",
+                "horizon": 500,
+                "do_eval": false
+            },
+            {
+                "path": "datasets/LIBERO_ALL/libero_90/KITCHEN_SCENE5_close_the_top_drawer_of_the_cabinet_demo.hdf5",
+                "horizon": 500,
+                "do_eval": false
+            },
+            {
+                "path": "datasets/LIBERO_ALL/libero_90/KITCHEN_SCENE5_put_the_black_bowl_in_the_top_drawer_of_the_cabinet_demo.hdf5",
+                "horizon": 500,
+                "do_eval": false
+            },
+            {
+                "path": "datasets/LIBERO_ALL/libero_90/KITCHEN_SCENE5_put_the_black_bowl_on_the_plate_demo.hdf5",
+                "horizon": 500,
+                "do_eval": false
+            },
+            {
+                "path": "datasets/LIBERO_ALL/libero_90/KITCHEN_SCENE5_put_the_black_bowl_on_top_of_the_cabinet_demo.hdf5",
+                "horizon": 500,
+                "do_eval": false
+            },
+            {
+                "path": "datasets/LIBERO_ALL/libero_90/KITCHEN_SCENE5_put_the_ketchup_in_the_top_drawer_of_the_cabinet_demo.hdf5",
+                "horizon": 500,
+                "do_eval": false
+            },
+            {
+                "path": "datasets/LIBERO_ALL/libero_90/KITCHEN_SCENE6_close_the_microwave_demo.hdf5",
+                "horizon": 500,
+                "do_eval": false
+            },
+            {
+                "path": "datasets/LIBERO_ALL/libero_90/KITCHEN_SCENE6_put_the_yellow_and_white_mug_to_the_front_of_the_white_mug_demo.hdf5",
+                "horizon": 500,
+                "do_eval": false
+            },
+            {
+                "path": "datasets/LIBERO_ALL/libero_90/KITCHEN_SCENE7_open_the_microwave_demo.hdf5",
+                "horizon": 500,
+                "do_eval": false
+            },
+            {
+                "path": "datasets/LIBERO_ALL/libero_90/KITCHEN_SCENE7_put_the_white_bowl_on_the_plate_demo.hdf5",
+                "horizon": 500,
+                "do_eval": false
+            },
+            {
+                "path": "datasets/LIBERO_ALL/libero_90/KITCHEN_SCENE7_put_the_white_bowl_to_the_right_of_the_plate_demo.hdf5",
+                "horizon": 500,
+                "do_eval": false
+            },
+            {
+                "path": "datasets/LIBERO_ALL/libero_90/KITCHEN_SCENE8_put_the_right_moka_pot_on_the_stove_demo.hdf5",
+                "horizon": 500,
+                "do_eval": false
+            },
+            {
+                "path": "datasets/LIBERO_ALL/libero_90/KITCHEN_SCENE8_turn_off_the_stove_demo.hdf5",
+                "horizon": 500,
+                "do_eval": false
+            },
+            {
+                "path": "datasets/LIBERO_ALL/libero_90/KITCHEN_SCENE9_put_the_frying_pan_on_the_cabinet_shelf_demo.hdf5",
+                "horizon": 500,
+                "do_eval": false
+            },
+            {
+                "path": "datasets/LIBERO_ALL/libero_90/KITCHEN_SCENE9_put_the_frying_pan_on_top_of_the_cabinet_demo.hdf5",
+                "horizon": 500,
+                "do_eval": false
+            },
+            {
+                "path": "datasets/LIBERO_ALL/libero_90/KITCHEN_SCENE9_put_the_frying_pan_under_the_cabinet_shelf_demo.hdf5",
+                "horizon": 500,
+                "do_eval": false
+            },
+            {
+                "path": "datasets/LIBERO_ALL/libero_90/KITCHEN_SCENE9_put_the_white_bowl_on_top_of_the_cabinet_demo.hdf5",
+                "horizon": 500,
+                "do_eval": false
+            },
+            {
+                "path": "datasets/LIBERO_ALL/libero_90/KITCHEN_SCENE9_turn_on_the_stove_and_put_the_frying_pan_on_it_demo.hdf5",
+                "horizon": 500,
+                "do_eval": false
+            },
+            {
+                "path": "datasets/LIBERO_ALL/libero_90/KITCHEN_SCENE9_turn_on_the_stove_demo.hdf5",
+                "horizon": 500,
+                "do_eval": false
+            },
+            {
+                "path": "datasets/LIBERO_ALL/libero_90/LIVING_ROOM_SCENE1_pick_up_the_alphabet_soup_and_put_it_in_the_basket_demo.hdf5",
+                "horizon": 500,
+                "do_eval": false
+            },
+            {
+                "path": "datasets/LIBERO_ALL/libero_90/LIVING_ROOM_SCENE1_pick_up_the_cream_cheese_box_and_put_it_in_the_basket_demo.hdf5",
+                "horizon": 500,
+                "do_eval": false
+            },
+            {
+                "path": "datasets/LIBERO_ALL/libero_90/LIVING_ROOM_SCENE1_pick_up_the_ketchup_and_put_it_in_the_basket_demo.hdf5",
+                "horizon": 500,
+                "do_eval": false
+            },
+            {
+                "path": "datasets/LIBERO_ALL/libero_90/LIVING_ROOM_SCENE1_pick_up_the_tomato_sauce_and_put_it_in_the_basket_demo.hdf5",
+                "horizon": 500,
+                "do_eval": false
+            },
+            {
+                "path": "datasets/LIBERO_ALL/libero_90/LIVING_ROOM_SCENE2_pick_up_the_alphabet_soup_and_put_it_in_the_basket_demo.hdf5",
+                "horizon": 500,
+                "do_eval": false
+            },
+            {
+                "path": "datasets/LIBERO_ALL/libero_90/LIVING_ROOM_SCENE2_pick_up_the_butter_and_put_it_in_the_basket_demo.hdf5",
+                "horizon": 500,
+                "do_eval": false
+            },
+            {
+                "path": "datasets/LIBERO_ALL/libero_90/LIVING_ROOM_SCENE2_pick_up_the_milk_and_put_it_in_the_basket_demo.hdf5",
+                "horizon": 500,
+                "do_eval": false
+            },
+            {
+                "path": "datasets/LIBERO_ALL/libero_90/LIVING_ROOM_SCENE2_pick_up_the_orange_juice_and_put_it_in_the_basket_demo.hdf5",
+                "horizon": 500,
+                "do_eval": false
+            },
+            {
+                "path": "datasets/LIBERO_ALL/libero_90/LIVING_ROOM_SCENE2_pick_up_the_tomato_sauce_and_put_it_in_the_basket_demo.hdf5",
+                "horizon": 500,
+                "do_eval": false
+            },
+            {
+                "path": "datasets/LIBERO_ALL/libero_90/LIVING_ROOM_SCENE3_pick_up_the_alphabet_soup_and_put_it_in_the_tray_demo.hdf5",
+                "horizon": 500,
+                "do_eval": false
+            },
+            {
+                "path": "datasets/LIBERO_ALL/libero_90/LIVING_ROOM_SCENE3_pick_up_the_butter_and_put_it_in_the_tray_demo.hdf5",
+                "horizon": 500,
+                "do_eval": false
+            },
+            {
+                "path": "datasets/LIBERO_ALL/libero_90/LIVING_ROOM_SCENE3_pick_up_the_cream_cheese_and_put_it_in_the_tray_demo.hdf5",
+                "horizon": 500,
+                "do_eval": false
+            },
+            {
+                "path": "datasets/LIBERO_ALL/libero_90/LIVING_ROOM_SCENE3_pick_up_the_ketchup_and_put_it_in_the_tray_demo.hdf5",
+                "horizon": 500,
+                "do_eval": false
+            },
+            {
+                "path": "datasets/LIBERO_ALL/libero_90/LIVING_ROOM_SCENE3_pick_up_the_tomato_sauce_and_put_it_in_the_tray_demo.hdf5",
+                "horizon": 500,
+                "do_eval": false
+            },
+            {
+                "path": "datasets/LIBERO_ALL/libero_90/LIVING_ROOM_SCENE4_pick_up_the_black_bowl_on_the_left_and_put_it_in_the_tray_demo.hdf5",
+                "horizon": 500,
+                "do_eval": false
+            },
+            {
+                "path": "datasets/LIBERO_ALL/libero_90/LIVING_ROOM_SCENE4_pick_up_the_chocolate_pudding_and_put_it_in_the_tray_demo.hdf5",
+                "horizon": 500,
+                "do_eval": false
+            },
+            {
+                "path": "datasets/LIBERO_ALL/libero_90/LIVING_ROOM_SCENE4_pick_up_the_salad_dressing_and_put_it_in_the_tray_demo.hdf5",
+                "horizon": 500,
+                "do_eval": false
+            },
+            {
+                "path": "datasets/LIBERO_ALL/libero_90/LIVING_ROOM_SCENE4_stack_the_left_bowl_on_the_right_bowl_and_place_them_in_the_tray_demo.hdf5",
+                "horizon": 500,
+                "do_eval": false
+            },
+            {
+                "path": "datasets/LIBERO_ALL/libero_90/LIVING_ROOM_SCENE4_stack_the_right_bowl_on_the_left_bowl_and_place_them_in_the_tray_demo.hdf5",
+                "horizon": 500,
+                "do_eval": false
+            },
+            {
+                "path": "datasets/LIBERO_ALL/libero_90/LIVING_ROOM_SCENE5_put_the_red_mug_on_the_left_plate_demo.hdf5",
+                "horizon": 500,
+                "do_eval": false
+            },
+            {
+                "path": "datasets/LIBERO_ALL/libero_90/LIVING_ROOM_SCENE5_put_the_red_mug_on_the_right_plate_demo.hdf5",
+                "horizon": 500,
+                "do_eval": false
+            },
+            {
+                "path": "datasets/LIBERO_ALL/libero_90/LIVING_ROOM_SCENE5_put_the_white_mug_on_the_left_plate_demo.hdf5",
+                "horizon": 500,
+                "do_eval": false
+            },
+            {
+                "path": "datasets/LIBERO_ALL/libero_90/LIVING_ROOM_SCENE5_put_the_yellow_and_white_mug_on_the_right_plate_demo.hdf5",
+                "horizon": 500,
+                "do_eval": false
+            },
+            {
+                "path": "datasets/LIBERO_ALL/libero_90/LIVING_ROOM_SCENE6_put_the_chocolate_pudding_to_the_left_of_the_plate_demo.hdf5",
+                "horizon": 500,
+                "do_eval": false
+            },
+            {
+                "path": "datasets/LIBERO_ALL/libero_90/LIVING_ROOM_SCENE6_put_the_chocolate_pudding_to_the_right_of_the_plate_demo.hdf5",
+                "horizon": 500,
+                "do_eval": false
+            },
+            {
+                "path": "datasets/LIBERO_ALL/libero_90/LIVING_ROOM_SCENE6_put_the_red_mug_on_the_plate_demo.hdf5",
+                "horizon": 500,
+                "do_eval": false
+            },
+            {
+                "path": "datasets/LIBERO_ALL/libero_90/LIVING_ROOM_SCENE6_put_the_white_mug_on_the_plate_demo.hdf5",
+                "horizon": 500,
+                "do_eval": false
+            },
+            {
+                "path": "datasets/LIBERO_ALL/libero_90/STUDY_SCENE1_pick_up_the_book_and_place_it_in_the_front_compartment_of_the_caddy_demo.hdf5",
+                "horizon": 500,
+                "do_eval": false
+            },
+            {
+                "path": "datasets/LIBERO_ALL/libero_90/STUDY_SCENE1_pick_up_the_book_and_place_it_in_the_left_compartment_of_the_caddy_demo.hdf5",
+                "horizon": 500,
+                "do_eval": false
+            },
+            {
+                "path": "datasets/LIBERO_ALL/libero_90/STUDY_SCENE1_pick_up_the_book_and_place_it_in_the_right_compartment_of_the_caddy_demo.hdf5",
+                "horizon": 500,
+                "do_eval": false
+            },
+            {
+                "path": "datasets/LIBERO_ALL/libero_90/STUDY_SCENE1_pick_up_the_yellow_and_white_mug_and_place_it_to_the_right_of_the_caddy_demo.hdf5",
+                "horizon": 500,
+                "do_eval": false
+            },
+            {
+                "path": "datasets/LIBERO_ALL/libero_90/STUDY_SCENE2_pick_up_the_book_and_place_it_in_the_back_compartment_of_the_caddy_demo.hdf5",
+                "horizon": 500,
+                "do_eval": false
+            },
+            {
+                "path": "datasets/LIBERO_ALL/libero_90/STUDY_SCENE2_pick_up_the_book_and_place_it_in_the_front_compartment_of_the_caddy_demo.hdf5",
+                "horizon": 500,
+                "do_eval": false
+            },
+            {
+                "path": "datasets/LIBERO_ALL/libero_90/STUDY_SCENE2_pick_up_the_book_and_place_it_in_the_left_compartment_of_the_caddy_demo.hdf5",
+                "horizon": 500,
+                "do_eval": false
+            },
+            {
+                "path": "datasets/LIBERO_ALL/libero_90/STUDY_SCENE2_pick_up_the_book_and_place_it_in_the_right_compartment_of_the_caddy_demo.hdf5",
+                "horizon": 500,
+                "do_eval": false
+            },
+            {
+                "path": "datasets/LIBERO_ALL/libero_90/STUDY_SCENE3_pick_up_the_book_and_place_it_in_the_front_compartment_of_the_caddy_demo.hdf5",
+                "horizon": 500,
+                "do_eval": false
+            },
+            {
+                "path": "datasets/LIBERO_ALL/libero_90/STUDY_SCENE3_pick_up_the_book_and_place_it_in_the_left_compartment_of_the_caddy_demo.hdf5",
+                "horizon": 500,
+                "do_eval": false
+            },
+            {
+                "path": "datasets/LIBERO_ALL/libero_90/STUDY_SCENE3_pick_up_the_book_and_place_it_in_the_right_compartment_of_the_caddy_demo.hdf5",
+                "horizon": 500,
+                "do_eval": false
+            },
+            {
+                "path": "datasets/LIBERO_ALL/libero_90/STUDY_SCENE3_pick_up_the_red_mug_and_place_it_to_the_right_of_the_caddy_demo.hdf5",
+                "horizon": 500,
+                "do_eval": false
+            },
+            {
+                "path": "datasets/LIBERO_ALL/libero_90/STUDY_SCENE3_pick_up_the_white_mug_and_place_it_to_the_right_of_the_caddy_demo.hdf5",
+                "horizon": 500,
+                "do_eval": false
+            },
+            {
+                "path": "datasets/LIBERO_ALL/libero_90/STUDY_SCENE4_pick_up_the_book_in_the_middle_and_place_it_on_the_cabinet_shelf_demo.hdf5",
+                "horizon": 500,
+                "do_eval": false
+            },
+            {
+                "path": "datasets/LIBERO_ALL/libero_90/STUDY_SCENE4_pick_up_the_book_on_the_left_and_place_it_on_top_of_the_shelf_demo.hdf5",
+                "horizon": 500,
+                "do_eval": false
+            },
+            {
+                "path": "datasets/LIBERO_ALL/libero_90/STUDY_SCENE4_pick_up_the_book_on_the_right_and_place_it_on_the_cabinet_shelf_demo.hdf5",
+                "horizon": 500,
+                "do_eval": false
+            },
+            {
+                "path": "datasets/LIBERO_ALL/libero_90/STUDY_SCENE4_pick_up_the_book_on_the_right_and_place_it_under_the_cabinet_shelf_demo.hdf5",
+                "horizon": 500,
+                "do_eval": false
+            }
+        ],
+        "output_dir": "../expdata/rss2025_policy/scbc_ipp_encoder_libero90_augpolicy",
+        "skill_dir" : "/workspace/robomimic/datasets/LIBERO_ALL/libero_90_skill/combined_ipp_encoder/aug",
+        "skill_aug" : true,
+        "aug_num" : 2,
+        "num_data_workers": 16,
+        "hdf5_cache_mode": "low_dim",
+        "hdf5_use_swmr": true,
+        "hdf5_load_next_obs": false,
+        "hdf5_normalize_obs": false,
+        "hdf5_filter_key": null,
+        "seq_length": 15,
+        "pad_seq_length": true,
+        "frame_stack": 2,
+        "pad_frame_stack": true,
+        "dataset_keys": [
+            "actions"
+        ],
+        "goal_mode": "skill",
+        "cuda": true,
+        "batch_size": 256,
+        "num_epochs": 2000,
+        "seed": 0,
+        "action_config": {
+            "actions": {
+                "normalization": null
+            },
+            "action_dict/abs_pos": {
+                "normalization": "min_max"
+            },
+            "action_dict/abs_rot_axis_angle": {
+                "normalization": "min_max",
+                "format": "rot_axis_angle"
+            },
+            "action_dict/abs_rot_6d": {
+                "normalization": null,
+                "format": "rot_6d"
+            },
+            "action_dict/rel_pos": {
+                "normalization": null
+            },
+            "action_dict/rel_rot_axis_angle": {
+                "normalization": null,
+                "format": "rot_axis_angle"
+            },
+            "action_dict/rel_rot_6d": {
+                "normalization": null,
+                "format": "rot_6d"
+            },
+            "action_dict/gripper": {
+                "normalization": null
+            },
+            "action_dict/base_mode": {
+                "normalization": null
+            }
+        },
+        "action_keys": [
+            "actions"
+        ]
+    },
+    "algo": {
+        "optim_params": {
+            "policy": {
+                "learning_rate": {
+                    "initial": 0.0001,
+                    "decay_factor": 0.1,
+                    "epoch_schedule": []
+                },
+                "regularization": {
+                    "L2": 0.0
+                }
+            }
+        },
+        "horizon": {
+            "observation_horizon": 2,
+            "action_horizon": 8,
+            "prediction_horizon": 16
+        },
+        "skill": {
+            "enabled": true,
+            "skill_dim": 64
+        },
+        "lang": {
+            "enabled": false,
+            "lang_dim": 512
+        },
+        "unet": {
+            "enabled": true,
+            "diffusion_step_embed_dim": 256,
+            "down_dims": [
+                256,
+                512,
+                1024
+            ],
+            "kernel_size": 5,
+            "n_groups": 8
+        },
+        "ema": {
+            "enabled": true,
+            "power": 0.75
+        },
+        "ddpm": {
+            "enabled": false,
+            "num_train_timesteps": 100,
+            "num_inference_timesteps": 100,
+            "beta_schedule": "squaredcos_cap_v2",
+            "clip_sample": true,
+            "prediction_type": "epsilon"
+        },
+        "ddim": {
+            "enabled": true,
+            "num_train_timesteps": 100,
+            "num_inference_timesteps": 10,
+            "beta_schedule": "squaredcos_cap_v2",
+            "clip_sample": true,
+            "set_alpha_to_one": true,
+            "steps_offset": 0,
+            "prediction_type": "epsilon"
+        }
+    },
+    "observation": {
+        "modalities": {
+            "obs": {
+                "low_dim": [
+                    "ee_ori",
+                    "ee_pos",
+                    "gripper_states",
+                    "joint_states"
+                ],
+                "rgb": [
+                    "eye_in_hand_rgb",
+                    "agentview_rgb"
+                ],
+                "depth": [],
+                "scan": []
+            },
+            "goal": {
+                "low_dim": [],
+                "rgb": [],
+                "depth": [],
+                "scan": []
+            }
+        },
+        "encoder": {
+            "low_dim": {
+                "core_class": null,
+                "core_kwargs": {},
+                "obs_randomizer_class": null,
+                "obs_randomizer_kwargs": {}
+            },
+            "rgb": {
+                "core_class": "VisualCore",
+                "core_kwargs": {
+                    "feature_dimension": 64,
+                    "backbone_class": "ResNet18Conv",
+                    "backbone_kwargs": {
+                        "pretrained": false,
+                        "input_coord_conv": false
+                    },
+                    "pool_class": "SpatialSoftmax",
+                    "pool_kwargs": {
+                        "num_kp": 32,
+                        "learnable_temperature": false,
+                        "temperature": 1.0,
+                        "noise_std": 0.0
+                    }
+                },
+                "obs_randomizer_class": "CropRandomizer",
+                "obs_randomizer_kwargs": {
+                    "crop_height": 116,
+                    "crop_width": 116,
+                    "num_crops": 1,
+                    "pos_enc": false
+                }
+            },
+            "depth": {
+                "core_class": "VisualCore",
+                "core_kwargs": {},
+                "obs_randomizer_class": null,
+                "obs_randomizer_kwargs": {}
+            },
+            "scan": {
+                "core_class": "ScanCore",
+                "core_kwargs": {},
+                "obs_randomizer_class": null,
+                "obs_randomizer_kwargs": {}
+            }
+        }
+    },
+    "meta": {
+        "hp_base_config_file": "robomimic/exps/templates/diffusion_policy.json",
+        "hp_keys": [
+            "seed",
+            "ds",
+            "ac_keys",
+            "obsrandargs"
+        ],
+        "hp_values": [
+            0,
+            "human-50",
+            "abs_acs",
+            {
+                "crop_height": 116,
+                "crop_width": 116,
+                "num_crops": 1,
+                "pos_enc": false
+            }
+        ]
+    }
+}
