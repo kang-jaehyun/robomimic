@@ -567,8 +567,11 @@ class SequenceDataset(torch.utils.data.Dataset):
             meta['goal_obs'] = {}
             
             if self.skill_aug:
-                aug_idx = random.randint(0, self.aug_num-1)
-                aug_skill_path = os.path.join(self.skill_dir, task_name, demo_id, 'aug_{}.npy'.format(aug_idx))
+                aug_idx = random.randint(0, self.aug_num)
+                if aug_idx == self.aug_num:
+                    aug_skill_path = os.path.join(self.skill_dir, task_name, demo_id, 'base.npy')
+                else:
+                    aug_skill_path = os.path.join(self.skill_dir, task_name, demo_id, 'aug_{}.npy'.format(aug_idx))
                 aug_skill = np.load(aug_skill_path)
                 meta["goal_obs"]["skill"] = aug_skill[goal_index]
             else:
