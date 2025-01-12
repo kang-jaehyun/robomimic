@@ -28,6 +28,31 @@ from robomimic.envs.wrappers import EnvWrapper
 from robomimic.algo import RolloutPolicy
 from tianshou.env import SubprocVectorEnv
 
+from libero.libero.envs import OffScreenRenderEnv, SubprocVectorEnv
+from libero.lifelong.metric import raw_obs_to_tensor_obs
+from libero.libero.utils.time_utils import Timer
+from libero.libero.utils.video_utils import VideoWriter
+from libero.libero.benchmark import get_benchmark
+from libero.lifelong.datasets import (GroupedTaskDataset, SequenceVLDataset, get_dataset)
+from libero.lifelong.utils import (get_task_embs, safe_device, create_experiment_dir)
+from libero.libero import benchmark, get_libero_path
+from omegaconf import OmegaConf
+import yaml
+from easydict import EasyDict
+from torchvision import transforms
+from hydra import compose, initialize
+import hydra
+import pprint
+import robosuite.utils.transform_utils as T
+import sys
+
+sys.path.append('/workspace/skill_transfer')
+from skill_transfer.dynamics.idm import IDM
+
+from transformers import AutoModel, pipeline, AutoTokenizer, CLIPTextModelWithProjection
+from transformers import Dinov2Model, AutoImageProcessor
+from transformers import AutoTokenizer, PretrainedConfig, Dinov2Model, AutoImageProcessor, CLIPTextModel, AutoModelForDepthEstimation, CLIPImageProcessor, CLIPVisionModel
+from PIL import Image
 
 def get_exp_dir(config, auto_remove_exp_dir=False):
     """
@@ -661,9 +686,9 @@ def rollout_libero_with_stats(
         policy,
         config,
         # envs,
-        # horizon,
+        horizon,
         # use_goals=False,
-        # num_episodes=None,
+        num_episodes=None,
         render=False,
         video_dir=None,
         video_path=None,
@@ -716,116 +741,317 @@ def rollout_libero_with_stats(
     assert isinstance(policy, RolloutPolicy)
 
     all_rollout_logs = OrderedDict()
+    initialize(config_path="../../../LIBERO/libero/configs")
+    hydra_cfg = compose(config_name="config")
+    yaml_config = OmegaConf.to_yaml(hydra_cfg)
+    cfg = EasyDict(yaml.safe_load(yaml_config))
 
-    # handle paths and create writers for video writing
-    assert (video_path is None) or (video_dir is None), "rollout_with_stats: can't specify both video path and dir"
-    write_video = (video_path is not None) or (video_dir is not None)
+    pp = pprint.PrettyPrinter(indent=2)
+    pp.pprint(cfg.policy)
 
-    if isinstance(horizon, list):
-        horizon_list = horizon
-    else:
-        horizon_list = [horizon]
+    # prepare lifelong learning
+    cfg.folder = get_libero_path("datasets")
+    cfg.bddl_folder = get_libero_path("bddl_files")
+    cfg.init_states_folder = get_libero_path("init_states")
+    cfg.eval.num_procs = 1
+    cfg.eval.n_eval = 5
 
-    for env, horizon in zip(envs, horizon_list):
-        batched = isinstance(env, SubprocVectorEnv)
+    cfg.train.n_epochs = 25
 
-        if batched:
-            env_name = env.get_env_attr(key="name", id=0)[0]
-        else:
-            env_name = env.name
+    pp.pprint(f"Note that the number of epochs used in this example is intentionally reduced to 5.")
 
-        if video_dir is not None:
-            # video is written per env
-            video_str = "_epoch_{}.mp4".format(epoch) if epoch is not None else ".mp4" 
-            video_path = os.path.join(video_dir, "{}{}".format(env_name, video_str))
-            video_writer = imageio.get_writer(video_path, fps=20)
+    task_order = cfg.data.task_order_index # can be from {0 .. 21}, default to 0, which is [task 0, 1, 2 ...]
+    cfg.benchmark_name = "libero_90" # can be from {"libero_spatial", "libero_object", "libero_goal", "libero_10"}
+    benchmark = get_benchmark(cfg.benchmark_name)(task_order)
+
+    all_tasks = [filename.split('.')[0] for filename in os.listdir('/workspace/datasets/LIBERO_ALL/libero_90')]
+    target_task_ids = list(range(65, 73))
+    
+    EXPERT_TYPE_LIST = ['human', 'libero']
+    SKILL_ALIGN = "frame"
+    SKILL_INTERVAL = 20
+    device = 'cuda'
+    
+    if config.train.goal_mode == "skill":
+        idm = IDM(
+            num_layers=8,
+            num_heads=4,
+            visual_channel=512,
+            depth_channel=1,
+            d_model=256,
+            out_dim=768,
+            num_visual_tokens=196, # for CLIP
+            num_depth_tokens=196
+        )
+        
+        state_dict = torch.load(f"/workspace/skill_transfer/outputs/combined_ipp_encoder/checkpoint-12250/idm.pth", map_location='cpu')
+        idm.load_state_dict(state_dict)
+        # idm = model.idm
+        visual_processor = CLIPImageProcessor.from_pretrained("openai/clip-vit-base-patch16")
+        depth_processor = AutoImageProcessor.from_pretrained("depth-anything/Depth-Anything-V2-Small-hf")
+        visual_encoder = CLIPVisionModel.from_pretrained("openai/clip-vit-base-patch16")
+        depth_estimator = AutoModelForDepthEstimation.from_pretrained("depth-anything/Depth-Anything-V2-Small-hf")
+        # visual_encoder = model.visual_encoder
+        # depth_estimator = model.depth_estimator
+
+        visual_encoder = visual_encoder.to(device)
+        depth_estimator = depth_estimator.to(device)
+        idm = idm.to(device)
+        
+        image_transforms = transforms.Compose(
+            [
+                transforms.Resize(
+                    (224, 224), interpolation=transforms.InterpolationMode.BILINEAR
+                ),
+                transforms.ToTensor(),
+            ]
+        )
+    
+    all_rollout_logs = {}
+    for EXPERT_TYPE in EXPERT_TYPE_LIST:
+        for task_id in target_task_ids:
+            success_count = 0
+            target_task = benchmark.get_task(task_id).name
+            print(target_task)
+
+            target_h5py_path = f'/workspace/datasets/LIBERO_ALL/libero_90/{target_task}_demo.hdf5'
+            video = np.array(h5py.File(target_h5py_path, 'r')['data']['demo_0']['obs']['agentview_rgb'])
+            trained_traj_len = video.shape[0]
             
-        env_video_writer = None
-        if write_video:
-            print("video writes to " + video_path)
-            env_video_writer = imageio.get_writer(video_path, fps=20)
+            if EXPERT_TYPE in ["libero", "human"]:
+                if EXPERT_TYPE == "human":
+                    from decord import VideoReader
+                    human_data_base_path = '/workspace/datasets/LIBERO_human_prompt'
+                    human_data_path = os.path.join(human_data_base_path, f"{target_task}_demo", '1.mp4')
+                    
+                    if os.path.exists(human_data_path):
+                        print("Loading human data from: ", human_data_path)
+                    else:
+                        print("Human data not found, skipping task: ", target_task)
+                        continue
+                    
+                    vr = VideoReader(human_data_path)
+                    video = vr.get_batch(range(len(vr)))
+                    video = video.asnumpy()
+                    
+                expert_traj_len = video.shape[0]
 
-        print("rollout: env={}, horizon={}, use_goals={}, num_episodes={}".format(
-            env_name, horizon, use_goals, num_episodes,
-        ))
-        rollout_logs = []
-        if batched:
-            iterator = range(0, num_episodes, len(env))
-        else:
-            iterator = range(num_episodes)
-        if not verbose:
-            iterator = LogUtils.custom_tqdm(iterator, total=num_episodes)
+                if SKILL_ALIGN == "frame":
+                    print("Aligning frame")
+                    aligned_video = []
+                    for i in range(trained_traj_len):
+                        ratio = expert_traj_len / trained_traj_len
+                        aligned_video.append(video[int(i*ratio)])
+                    video = np.stack(aligned_video)
+                    print("Aligned video shape: ", video.shape)
+                    print("Expert traj len: ", expert_traj_len)
+                    print("Training traj len: ", trained_traj_len)
+                
+                first_frame = video[:1]
+                last_frame = video[-1:]
+                
+                initial_padding = 0
+                
+                video = np.concatenate([np.repeat(first_frame, initial_padding, axis=0), video], axis=0)
+                next_video = np.concatenate([video, np.repeat(last_frame, SKILL_INTERVAL, axis=0)], axis=0)[SKILL_INTERVAL:]
+                
+                curr_img = np.flip(video, axis=1)
+                goal_img = np.flip(next_video, axis=1)
+                
+                # curr_img = video
+                # goal_img = next_video
+                
+                curr_depth_feature = depth_processor(curr_img, return_tensors='pt')["pixel_values"]
+                curr_feature = visual_processor(curr_img, return_tensors='pt')["pixel_values"]
+                goal_depth_feature = depth_processor(goal_img, return_tensors='pt')["pixel_values"]
+                goal_feature = visual_processor(goal_img, return_tensors='pt')["pixel_values"]
 
-        num_success = 0
-        for ep_i in iterator:
-            rollout_timestamp = time.time()
-            try:
-                rollout_info = run_rollout(
-                    policy=policy,
-                    env=env,
-                    horizon=horizon,
-                    render=render,
-                    use_goals=use_goals,
-                    video_writer=env_video_writer,
-                    video_skip=video_skip,
-                    terminate_on_success=terminate_on_success,
-                )
-            except Exception as e:
-                print("Rollout exception at episode number {}!".format(ep_i))
-                print(traceback.format_exc())
-                break
-            
-            if batched:
-                rollout_info["time"] = [(time.time() - rollout_timestamp) / len(env)] * len(env)
+                # visual_features = torch.cat([curr_feature, goal_feature]).to(device)
+                # depth_features = torch.cat([curr_depth_feature, goal_depth_feature]).to(device)
+                
+                
+                processed_skill = []
+                batch_size = 4
+                
+                for i in range(0, len(curr_feature), batch_size):
+                    with torch.no_grad():
+                        # visual_features = torch.cat([curr_feature[i:i+batch_size], goal_feature[i:i+batch_size]]).to(device)
+                        depth_features = torch.cat([curr_depth_feature[i:i+batch_size], goal_depth_feature[i:i+batch_size]]).to(device)
+                        # features = visual_encoder(visual_features).last_hidden_state
+                        depth_outputs = depth_estimator(depth_features).predicted_depth
+                        
+                        # curr_features, next_features = torch.chunk(features[:, 1:], 2, dim=0)
+                        curr_depth_features, next_depth_features = torch.chunk(depth_outputs, 2, dim=0)
 
-                for env_i in range(len(env)):
-                    rollout_logs.append({k: rollout_info[k][env_i] for k in rollout_info})
-                num_success += np.sum(rollout_info["Success_Rate"])
-            else:
-                rollout_info["time"] = time.time() - rollout_timestamp
 
-                rollout_logs.append(rollout_info)
-                num_success += rollout_info["Success_Rate"]
-            
-            if verbose:
-                if batched:
-                    raise NotImplementedError
-                print("Episode {}, horizon={}, num_success={}".format(ep_i + 1, horizon, num_success))
-                print(json.dumps(rollout_info, sort_keys=True, indent=4))
+                        curr_images = torch.stack([image_transforms(Image.fromarray(frame)) for frame in curr_img[i:i+batch_size]]).to(device)
+                        next_images = torch.stack([image_transforms(Image.fromarray(frame)) for frame in goal_img[i:i+batch_size]]).to(device)
+                        
+                        # curr_images = image_transforms(torch.tensor(curr_img[i:i+batch_size])).to(device)
+                        # next_images = image_transforms(torch.tensor(goal_img[i:i+batch_size])).to(device)
+                        
+                        visual_pair = torch.stack([
+                            curr_images,
+                            next_images
+                        ], dim=1)
+                        
+                        
+                        # visual_pair = torch.stack([curr_features, next_features], dim=1)
+                        depth_pair = torch.stack([curr_depth_features, next_depth_features], dim=1)
+                        depth_pair = torch.nn.functional.interpolate(depth_pair, size=(224,224), mode="bilinear", align_corners=False)
+                        skill = idm(depth_pair, visual_pair, return_skill=True)
+                        
+                        processed_skill.append(skill)
+                
+                skill_all = torch.cat(processed_skill)
 
-        if video_dir is not None:
-            # close this env's video writer (next env has it's own)
-            env_video_writer.close()
+                if SKILL_ALIGN == "skill":
+                    print("Aligning skill")
+                    aligned_skill = []
+                    for i in range(trained_traj_len):
+                        ratio = expert_traj_len / trained_traj_len
+                        aligned_skill.append(skill_all[int(i*ratio)])
+                    skill_all = torch.stack(aligned_skill)
 
-        # average metric across all episodes
-        if len(rollout_logs) > 0:
-            rollout_logs = dict((k, [rollout_logs[i][k] for i in range(len(rollout_logs))]) for k in rollout_logs[0])
-            rollout_logs_mean = dict((k, np.mean(v)) for k, v in rollout_logs.items())
-            rollout_logs_mean["Time_Episode"] = np.sum(rollout_logs["time"]) / 60. # total time taken for rollouts in minutes
-            all_rollout_logs[env_name] = rollout_logs_mean
-        else:
-            all_rollout_logs[env_name] = {"Time_Episode": -1, "Return": -1, "Success_Rate": -1, "time": -1}
+                    print("Training traj len: ", trained_traj_len)
+                    print("Expert traj len: ", expert_traj_len)
+                    print("Latent skill shape: ", skill_all.shape)
 
-        if del_envs_after_rollouts:
-            # delete the environment after use
-            del env
+                steps = 0
+                obs_tensors = [[]] * num_episodes
+                policy.start_episode()
 
-        if data_logger is not None:
-            # summarize results from rollouts to tensorboard and terminal
-            rollout_logs = all_rollout_logs[env_name]
-            for k, v in rollout_logs.items():
-                if k.startswith("Time_"):
-                    data_logger.record("Timing_Stats/Rollout_{}_{}".format(env_name, k[5:]), v, epoch)
-                else:
-                    data_logger.record("Rollout/{}/{}".format(k, env_name), v, epoch, log_stats=True)
+                task = benchmark.get_task(task_id)
+                # task_emb = benchmark.get_task_emb(task_id)
 
-            print("\nEpoch {} Rollouts took {}s (avg) with results:".format(epoch, rollout_logs["time"]))
-            print('Env: {}'.format(env_name))
-            print(json.dumps(rollout_logs, sort_keys=True, indent=4))
+                # if cfg.lifelong.algo == "PackNet":
+                    # algo = algo.get_eval_algo(task_id)
+                current_file_dir = os.path.dirname(os.path.abspath(__file__))
+                video_folder = os.path.join(video_dir, str(epoch), EXPERT_TYPE, f"{target_task}")
+                os.makedirs(video_folder, exist_ok=True)
+                with Timer() as t, VideoWriter(video_folder, True) as video_writer:
+                    # algo.eval()
+                    env_args = {
+                        "bddl_file_name": os.path.join(
+                            cfg.bddl_folder, task.problem_folder, task.bddl_file
+                        ),
+                        "camera_heights": cfg.data.img_h,
+                        "camera_widths": cfg.data.img_w,
+                    }
+                    
+                    env = SubprocVectorEnv(
+                        [lambda: OffScreenRenderEnv(**env_args) for _ in range(num_episodes)]
+                    )
+                    env.reset()
+                    env.seed(cfg.seed)
 
-    if video_path is not None:
-        # close video writer that was used for all envs
-        video_writer.close()
+                    init_states_path = os.path.join(
+                        cfg.init_states_folder, task.problem_folder, task.init_states_file
+                    )
+                    init_states = torch.load(init_states_path)
+                    indices = np.arange(num_episodes) % init_states.shape[0]
+                    init_states_ = init_states[indices]
+                    
+                    dones = [False] * num_episodes
+                    steps = 0
+                    obs = env.set_init_state(init_states_)
+                    # task_emb = benchmark.get_task_emb(task_id)
+
+                    # algo.reset()
+
+                    # save obs as pickle file
+                    # pickle.dump(env, open(f'{EXP_DIR}env.pkl', 'wb'))
+
+                    # Make sure the gripepr is open to make it consistent with the provided demos.
+                    
+                    num_success = 0
+                    for _ in range(5):  # simulate the physics swithout any actions
+                        env.step(np.zeros((num_episodes, 7)))
+
+                    first_step = True
+                    # while steps < gtskill.shape[0]-window:
+                    while steps < horizon:
+                        steps += 1
+                        
+                        task_emb = torch.zeros(1, 50) # just a dummy task embedding
+                        data = raw_obs_to_tensor_obs(obs, task_emb, cfg)
+                        del data['task_emb']
+                        ee_states = np.hstack(
+                                    (
+                                        np.stack([obs[i]['robot0_eef_pos'] for i in range(num_episodes)]),
+                                        (np.stack([T.quat2axisangle(obs[i]['robot0_eef_quat']) for i in range(num_episodes)])),
+                                    )
+                                )
+                        ee_pos = ee_states[:, :3]
+                        ee_ori = ee_states[:, 3:]
+                        
+                        data['obs']['ee_ori'] = torch.tensor(ee_ori).to(device)
+                        data['obs']['ee_pos'] = torch.tensor(ee_pos).to(device)
+                        
+
+                        if EXPERT_TYPE == "lang":
+                            raise NotImplementedError
+                            # action = policy(
+                            #     ob=data['obs'], 
+                            #     lang_emb=cls_emb[None].expand(num_episodes, -1, -1), 
+                            #     # skill=skill.expand(num_episodes, -1, -1),
+                            #     # goal=data['goal_obs'],
+                            #     batched=True,
+                            # )
+                        elif EXPERT_TYPE == "noise":
+                            action = policy(
+                                ob=data['obs'],
+                                skill = torch.randn(num_episodes, 1, 64).to(device),
+                                batched=True
+                            )
+                        else:
+                            if steps < skill_all.shape[0]:
+                                skill = skill_all[steps-1:steps]
+                            else:
+                                skill = skill_all[-1:]
+                        
+                            action = policy(
+                                ob=data['obs'], 
+                                # lang_emb=cls_emb[None].expand(num_episodes, -1, -1), 
+                                skill=skill.expand(num_episodes, -1, -1),
+                                # goal=data['goal_obs'],
+                                batched=True,
+                            )
+
+                            
+                        obs, reward, done, info = env.step(action)
+                        video_writer.append_vector_obs(
+                                obs, dones, camera_name="agentview_image"
+                        )
+                        
+                        for k in range(num_episodes):
+                            dones[k] = dones[k] or done[k]
+                                
+                            # obs_tensors[k].append(obs[k]["agentview_image"])
+                        if all(dones):
+                            break
+
+                    for k in range(num_episodes):
+                        num_success += int(dones[k])
+                        
+                success_rate = num_success / num_episodes
+                env.close()
+                # if data_logger is not None:
+                # summarize results from rollouts to tensorboard and terminal
+                
+                rollout_logs = {"success_rate": success_rate}
+                data_logger.record("Rollout/{}/{}".format("Success_Rate", f"{target_task}_{EXPERT_TYPE}"), success_rate, epoch, log_stats=True)
+                # for k, v in rollout_logs.items():
+                #     if k.startswith("Time_"):
+                #         data_logger.record("Timing_Stats/Rollout_{}_{}".format(env_name, k[5:]), v, epoch)
+                #     else:
+                #         data_logger.record("Rollout/{}/{}".format(k, env_name), v, epoch, log_stats=True)
+
+                # print("\nEpoch {} Rollouts took {}s (avg) with results:".format(epoch, rollout_logs["time"]))
+                # print('Env: {}'.format(env_name))
+                print(json.dumps(rollout_logs, sort_keys=True, indent=4))
+                
+                all_rollout_logs[f"{target_task}_{EXPERT_TYPE}"] = rollout_logs
 
     return all_rollout_logs, None
 

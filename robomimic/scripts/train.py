@@ -327,9 +327,9 @@ def train(config, device):
                     policy=rollout_model,
                     config=config,
                     # envs=env_iterator(),
-                    # horizon=eval_env_horizon_list,
+                    horizon=300,
                     # use_goals=config.use_goals,
-                    # num_episodes=num_episodes,
+                    num_episodes=num_episodes,
                     render=False,
                     video_dir=video_dir if config.experiment.render_video else None,
                     epoch=epoch,
@@ -368,20 +368,20 @@ def train(config, device):
             #     print(json.dumps(rollout_logs, sort_keys=True, indent=4))
 
             # checkpoint and video saving logic
-            updated_stats = TrainUtils.should_save_from_rollout_logs(
-                all_rollout_logs=all_rollout_logs,
-                best_return=best_return,
-                best_success_rate=best_success_rate,
-                epoch_ckpt_name=epoch_ckpt_name,
-                save_on_best_rollout_return=config.experiment.save.on_best_rollout_return,
-                save_on_best_rollout_success_rate=config.experiment.save.on_best_rollout_success_rate,
-            )
-            best_return = updated_stats["best_return"]
-            best_success_rate = updated_stats["best_success_rate"]
-            epoch_ckpt_name = updated_stats["epoch_ckpt_name"]
-            should_save_ckpt = (config.experiment.save.enabled and updated_stats["should_save_ckpt"]) or should_save_ckpt
-            if updated_stats["ckpt_reason"] is not None:
-                ckpt_reason = updated_stats["ckpt_reason"]
+            # updated_stats = TrainUtils.should_save_from_rollout_logs(
+            #     all_rollout_logs=all_rollout_logs,
+            #     best_return=best_return,
+            #     best_success_rate=best_success_rate,
+            #     epoch_ckpt_name=epoch_ckpt_name,
+            #     save_on_best_rollout_return=config.experiment.save.on_best_rollout_return,
+            #     save_on_best_rollout_success_rate=config.experiment.save.on_best_rollout_success_rate,
+            # )
+            # best_return = updated_stats["best_return"]
+            # best_success_rate = updated_stats["best_success_rate"]
+            # epoch_ckpt_name = updated_stats["epoch_ckpt_name"]
+            # should_save_ckpt = (config.experiment.save.enabled and updated_stats["should_save_ckpt"]) or should_save_ckpt
+            # if updated_stats["ckpt_reason"] is not None:
+            #     ckpt_reason = updated_stats["ckpt_reason"]
 
         # check if we need to save model MSE
         should_save_mse = False
