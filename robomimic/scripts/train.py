@@ -322,20 +322,36 @@ def train(config, device):
             )
 
             num_episodes = config.experiment.rollout.n
-            all_rollout_logs, video_paths = TrainUtils.rollout_with_stats(
-                policy=rollout_model,
-                envs=env_iterator(),
-                horizon=eval_env_horizon_list,
-                use_goals=config.use_goals,
-                num_episodes=num_episodes,
-                render=False,
-                video_dir=video_dir if config.experiment.render_video else None,
-                epoch=epoch,
-                video_skip=config.experiment.get("video_skip", 5),
-                terminate_on_success=config.experiment.rollout.terminate_on_success,
-                del_envs_after_rollouts=True,
-                data_logger=data_logger,
-            )
+            if True: # libero
+                all_rollout_logs, video_paths = TrainUtils.rollout_libero_with_stats(
+                    policy=rollout_model,
+                    config=config,
+                    # envs=env_iterator(),
+                    # horizon=eval_env_horizon_list,
+                    # use_goals=config.use_goals,
+                    # num_episodes=num_episodes,
+                    render=False,
+                    video_dir=video_dir if config.experiment.render_video else None,
+                    epoch=epoch,
+                    video_skip=config.experiment.get("video_skip", 5),
+                    terminate_on_success=config.experiment.rollout.terminate_on_success,
+                    del_envs_after_rollouts=True,
+                    data_logger=data_logger,
+                )
+            # all_rollout_logs, video_paths = TrainUtils.rollout_with_stats(
+            #     policy=rollout_model,
+            #     envs=env_iterator(),
+            #     horizon=eval_env_horizon_list,
+            #     use_goals=config.use_goals,
+            #     num_episodes=num_episodes,
+            #     render=False,
+            #     video_dir=video_dir if config.experiment.render_video else None,
+            #     epoch=epoch,
+            #     video_skip=config.experiment.get("video_skip", 5),
+            #     terminate_on_success=config.experiment.rollout.terminate_on_success,
+            #     del_envs_after_rollouts=True,
+            #     data_logger=data_logger,
+            # )
 
             #### move this code to rollout_with_stats function to log results one by one ####
             # # summarize results from rollouts to tensorboard and terminal

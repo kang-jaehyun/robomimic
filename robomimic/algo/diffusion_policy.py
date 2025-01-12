@@ -361,7 +361,7 @@ class DiffusionPolicyUNet(PolicyAlgo):
             action_sequence = self._get_action_trajectory(obs_dict=obs_dict_tensor, goal_dict=goal_dict, skill=skill, lang_emb=lang_emb)
             
             # put actions into the queue
-            self.action_queue.append(action_sequence[:, 0])
+            self.action_queue.extend(action_sequence.permute(1,0,2)[:Ta])
         
         # has action, execute from left to right
         # [Da]
