@@ -147,7 +147,8 @@ class DiffusionPolicyUNet(PolicyAlgo):
         # setup EMA
         ema = None
         if self.algo_config.ema.enabled:
-            ema = EMAModel(model=nets, power=self.algo_config.ema.power)
+            # ema = EMAModel(model=nets, power=self.algo_config.ema.power)
+            ema = EMAModel(nets.parameters(), model_cls=nets, power=self.algo_config.ema.power)
                 
         # set attrs
         self.nets = nets
@@ -387,7 +388,8 @@ class DiffusionPolicyUNet(PolicyAlgo):
         # select network
         nets = self.nets
         if self.ema is not None:
-            nets = self.ema.averaged_model
+            # nets = self.ema.averaged_model
+            nets = self.ema
         
         # encode obs
         inputs = {
@@ -410,7 +412,11 @@ class DiffusionPolicyUNet(PolicyAlgo):
         if self.algo_config.lang.enabled:
             lang_emb = lang_emb[:,-1, :]
             obs_cond = torch.cat([obs_cond, lang_emb], axis=-1)
-        
+            
+        if self.algo_config.subgoal.enabled:
+            subgoal_feature = nets.model_cls['policy']['obs_encoder'].nets['obs'].obs_nets['agentview_rgb'](goal_dict['agentview_rgb'].permute(0,3,1,2)/255.0)
+            obs_cond = torch.cat([obs_cond, subgoal_feature], axis=-1)
+            
         # initialize action from Guassian noise
         noisy_action = torch.randn(
             (B, Tp, action_dim), device=self.device)
@@ -421,7 +427,7 @@ class DiffusionPolicyUNet(PolicyAlgo):
 
         for k in self.noise_scheduler.timesteps:
             # predict noise
-            noise_pred = nets['policy']['noise_pred_net'](
+            noise_pred = nets.model_cls['policy']['noise_pred_net'](
                 sample=naction, 
                 timestep=k,
                 global_cond=obs_cond
@@ -446,7 +452,7 @@ class DiffusionPolicyUNet(PolicyAlgo):
         """
         return {
             "nets": self.nets.state_dict(),
-            "ema": self.ema.averaged_model.state_dict() if self.ema is not None else None,
+            "ema": self.ema.state_dict() if self.ema is not None else None,
         }
 
     def deserialize(self, model_dict):
@@ -459,7 +465,8 @@ class DiffusionPolicyUNet(PolicyAlgo):
         """
         self.nets.load_state_dict(model_dict["nets"])
         if model_dict.get("ema", None) is not None:
-            self.ema.averaged_model.load_state_dict(model_dict["ema"])
+            # self.ema.averaged_model.load_state_dict(model_dict["ema"])
+            self.ema.load_state_dict(model_dict["ema"])
 
     
             

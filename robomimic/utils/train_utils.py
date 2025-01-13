@@ -741,6 +741,7 @@ def rollout_libero_with_stats(
     assert isinstance(policy, RolloutPolicy)
 
     all_rollout_logs = OrderedDict()
+    hydra.core.global_hydra.GlobalHydra.instance().clear()
     initialize(config_path="../../../LIBERO/libero/configs")
     hydra_cfg = compose(config_name="config")
     yaml_config = OmegaConf.to_yaml(hydra_cfg)
@@ -822,7 +823,7 @@ def rollout_libero_with_stats(
                 if EXPERT_TYPE == "human":
                     from decord import VideoReader
                     human_data_base_path = '/workspace/datasets/LIBERO_human_prompt'
-                    human_data_path = os.path.join(human_data_base_path, f"{target_task}_demo", '1.mp4')
+                    human_data_path = os.path.join(human_data_base_path, f"{target_task}_demo", '0.mp4')
                     
                     if os.path.exists(human_data_path):
                         print("Loading human data from: ", human_data_path)
