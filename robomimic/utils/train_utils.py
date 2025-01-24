@@ -785,17 +785,17 @@ def rollout_libero_with_stats(
             num_depth_tokens=196
         )
         
-        state_dict = torch.load(f"/workspace/skill_transfer/outputs/combined_ipp_encoder/checkpoint-12250/idm.pth", map_location='cpu')
+        state_dict = torch.load(config.experiment.rollout.idm_path, map_location='cpu')
         idm.load_state_dict(state_dict)
         # idm = model.idm
-        visual_processor = CLIPImageProcessor.from_pretrained("openai/clip-vit-base-patch16")
+        # visual_processor = CLIPImageProcessor.from_pretrained("openai/clip-vit-base-patch16")
         depth_processor = AutoImageProcessor.from_pretrained("depth-anything/Depth-Anything-V2-Small-hf")
-        visual_encoder = CLIPVisionModel.from_pretrained("openai/clip-vit-base-patch16")
+        # visual_encoder = CLIPVisionModel.from_pretrained("openai/clip-vit-base-patch16")
         depth_estimator = AutoModelForDepthEstimation.from_pretrained("depth-anything/Depth-Anything-V2-Small-hf")
         # visual_encoder = model.visual_encoder
         # depth_estimator = model.depth_estimator
 
-        visual_encoder = visual_encoder.to(device)
+        # visual_encoder = visual_encoder.to(device)
         depth_estimator = depth_estimator.to(device)
         idm = idm.to(device)
         
@@ -863,9 +863,9 @@ def rollout_libero_with_stats(
                 # goal_img = next_video
                 
                 curr_depth_feature = depth_processor(curr_img, return_tensors='pt')["pixel_values"]
-                curr_feature = visual_processor(curr_img, return_tensors='pt')["pixel_values"]
+                # curr_feature = visual_processor(curr_img, return_tensors='pt')["pixel_values"]
                 goal_depth_feature = depth_processor(goal_img, return_tensors='pt')["pixel_values"]
-                goal_feature = visual_processor(goal_img, return_tensors='pt')["pixel_values"]
+                # goal_feature = visual_processor(goal_img, return_tensors='pt')["pixel_values"]
 
                 # visual_features = torch.cat([curr_feature, goal_feature]).to(device)
                 # depth_features = torch.cat([curr_depth_feature, goal_depth_feature]).to(device)
@@ -874,15 +874,19 @@ def rollout_libero_with_stats(
                 processed_skill = []
                 batch_size = 4
                 
-                for i in range(0, len(curr_feature), batch_size):
+                for i in range(0, len(curr_depth_feature), batch_size):
                     with torch.no_grad():
                         # visual_features = torch.cat([curr_feature[i:i+batch_size], goal_feature[i:i+batch_size]]).to(device)
                         depth_features = torch.cat([curr_depth_feature[i:i+batch_size], goal_depth_feature[i:i+batch_size]]).to(device)
                         # features = visual_encoder(visual_features).last_hidden_state
                         depth_outputs = depth_estimator(depth_features).predicted_depth
+                        depth_min, depth_max = depth_outputs.flatten(1).min(dim=1)[0], depth_outputs.flatten(1).max(dim=1)[0]
+                        depth_outputs = (depth_outputs - depth_min[..., None, None]) / (depth_max - depth_min)[..., None, None]
                         
                         # curr_features, next_features = torch.chunk(features[:, 1:], 2, dim=0)
                         curr_depth_features, next_depth_features = torch.chunk(depth_outputs, 2, dim=0)
+                        depth_pair = torch.stack([curr_depth_features, next_depth_features], dim=1)
+                        depth_pair = torch.nn.functional.interpolate(depth_pair, size=(224,224), mode="bilinear", align_corners=False)
 
 
                         curr_images = torch.stack([image_transforms(Image.fromarray(frame)) for frame in curr_img[i:i+batch_size]]).to(device)
@@ -898,8 +902,6 @@ def rollout_libero_with_stats(
                         
                         
                         # visual_pair = torch.stack([curr_features, next_features], dim=1)
-                        depth_pair = torch.stack([curr_depth_features, next_depth_features], dim=1)
-                        depth_pair = torch.nn.functional.interpolate(depth_pair, size=(224,224), mode="bilinear", align_corners=False)
                         skill = idm(depth_pair, visual_pair, return_skill=True)
                         
                         processed_skill.append(skill)

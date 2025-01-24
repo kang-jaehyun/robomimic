@@ -129,6 +129,7 @@ class BaseConfig(Config):
         self.experiment.rollout.terminate_on_success = True         # end rollout early after task success
         self.experiment.rollout.batched = False                     # whether to parallelize evaluations over batched environments
         self.experiment.rollout.num_batch_envs = 5                  # number of batched environments to use (applicable if experiment.rollout.batched is True)
+        self.experiment.rollout.idm_path = None
 
         # for updating the evaluation env meta data
         self.experiment.env_meta_update_dict = Config()
