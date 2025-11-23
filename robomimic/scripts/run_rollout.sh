@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# 입력받은 첫 번째 인자가 폴더 경로로 사용됩니다.
+# The first argument is used as the folder path.
 FOLDER=$1
 SEED=$2
 NAME=$3
@@ -15,30 +15,30 @@ if [ -z "$NAME" ]; then
   NAME="default"
 fi
 
-# 모델 파일들이 있는 경로 설정
+# Set path for model files
 MODEL_DIR="$FOLDER/models"
 
-# config 파일 경로 설정
+# Set path for config file
 CONFIG_FILE="$FOLDER/config.json"
 
-# 모델 파일이 있는 디렉토리가 존재하는지 확인
+# Check if the model directory exists
 if [ ! -d "$MODEL_DIR" ]; then
   echo "Error: Model directory not found: $MODEL_DIR"
   exit 1
 fi
 
-# 모델 디렉토리 안의 모든 model_epoch_*.pth 파일에 대해 반복 실행
+# Iterate over all model_epoch_*.pth files in the model directory
 for MODEL_FILE in "$MODEL_DIR"/model_epoch_*.pth; do
   if [ -f "$MODEL_FILE" ]; then
-    # 파일명에서 epoch 숫자 추출 (model_epoch_XXX.pth에서 XXX를 추출)
+    # Extract epoch number from filename (extract XXX from model_epoch_XXX.pth)
     EPOCH=$(basename "$MODEL_FILE" | sed -E 's/model_epoch_([0-9]+)\.pth/\1/')
 
     echo "Running rollout for model: $MODEL_FILE (Epoch: $EPOCH)"
     
-    # python 명령어 실행 (추출한 epoch 값을 --epoch 인자로 추가)
-    yes | DISPLAY=:1 python robomimic/scripts/rollout.py --config "$CONFIG_FILE" --ckpt "$MODEL_FILE" --rollout_num 50 --epoch "$EPOCH" --seed "$SEED" --name "$NAME"
+    # Run python command (add extracted epoch value as --epoch argument)
+    yes | python robomimic/scripts/rollout.py --config "$CONFIG_FILE" --ckpt "$MODEL_FILE" --rollout_num 50 --epoch "$EPOCH" --seed "$SEED" --name "$NAME"
     
-    # 각 실행이 끝날 때까지 기다림
+    # Wait for each execution to finish
     wait
 
   else
