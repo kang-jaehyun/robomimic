@@ -4,11 +4,19 @@ This repository is the **policy learning component of UniSkill**, based on [robo
 
 ## Installation
 
+### Prerequisites
+
+1.  **RoboCasa**: You must install the [RoboCasa](https://github.com/robocasa/robocasa) codebase first. Please follow the installation instructions in their repository.
+
+### Install Robomimic
+
 ```bash
+git clone https://github.com/UniSkill/robomimic.git
+cd robomimic
 pip install -e .
 ```
 
-## Prerequisites
+## Prerequisites for Training
 
 Before training, ensure that you have prepared the necessary data.
 - **Skill Directory**: You must extract or prepare the skill directory (skill embeddings/data) in advance before running the training script.
